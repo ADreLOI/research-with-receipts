@@ -311,7 +311,9 @@ HIGHLIGHT_JS = r"""
   let best = null;
   for (const c of cands) {
     const q = squash(c);
-    if (q.length < 12) continue;
+    // Short quotes ("Price: 19 EUR") are fine as a whole; fragments of a long
+    // quote need more letters before they count as a match.
+    if (q.length < (c === cands[0] ? 6 : 12)) continue;
     for (let idx = flat.indexOf(q), seen = 0; idx >= 0 && seen < 25; idx = flat.indexOf(q, idx + 1), seen++) {
       const [sn, so] = map[idx];
       const [en, eo] = map[idx + q.length - 1];
