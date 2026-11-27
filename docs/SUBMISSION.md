@@ -3,7 +3,7 @@
 > Fill in the remaining links before submitting. Everything else is ready to paste.
 
 - **Repository:** https://github.com/ADreLOI/research-with-receipts (branch `claude/research-with-receipts`)
-- **Live demo:** `<public URL on the Vultr VM>`
+- **Live demo:** https://78-141-218-240.sslip.io (Vultr Cloud Compute, Amsterdam, vc2-2c-4gb, Ubuntu 24.04)
 - **Video (2 min):** `<video URL>`
 - **Access code (only if the page asks for one):** `<APP_ACCESS_CODE, or delete this line if none is set>`
 - **Team:** `<names>`
@@ -25,7 +25,7 @@ Research agents are persuasive, and that's the problem: you can't tell a real ci
 ## How Vultr is used
 
 - **Vultr Cloud Compute VM**: the FastAPI control plane, agent loop, receipts store, and the Docker host for sandboxes, behind Caddy.
-- **Vultr Serverless Inference**: all reasoning (OpenAI-compatible API), plus an optional vision model that checks each highlighted screenshot. The provider auto-picks models from `/v1/models`, retries with backoff and can switch to a fallback model.
+- **Vultr Serverless Inference**: all reasoning (OpenAI-compatible API) with `deepseek-v4.1-flash-1017`, `qwen3.8-27b` as the fallback model, and `mimo-v2.6-flash` as the vision model that checks each highlighted screenshot. The provider auto-picks models from `/v1/models`, retries with backoff and can switch to a fallback model.
 - **Vultr as the sandbox fabric**: sandboxes are containers on Vultr compute, never in the app process. `scripts/vultr_sandbox_vm.py` uses the Vultr API to create a dedicated sandbox VM (Docker, egress guard, SSH locked to the app VM, sandbox image built by cloud-init), points the app at it over SSH, and destroys it afterwards.
 
 ## Containment

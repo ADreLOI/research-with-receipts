@@ -6,7 +6,7 @@ A receipt is evidence captured inside the sandbox at the moment the agent read i
 
 Built for Vultr Meetup #42 (12h hackathon), Pattern B (sandboxed browser use) with Pattern A (sandboxed code execution) as a tool.
 
-**Live demo:** _link added after deployment_ · **Video:** _link added after recording_ · **Submission text:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
+**Live demo:** https://78-141-218-240.sslip.io (Vultr Amsterdam; access code on the submission form) · **Video:** _link added after recording_ · **Submission text:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
 
 ![Containment test: eight attacks thrown at a fresh Docker sandbox, all contained](docs/img/containment-test.png)
 
@@ -80,7 +80,7 @@ flowchart LR
 | Prompt injection | Content fenced as untrusted data, system prompt forbids following it, guard event in UI, and even if the model complies the sandbox has nothing to leak |
 | Kernel escape | Optional gVisor runtime (`INSTALL_GVISOR=1`, `SANDBOX_RUNTIME=runsc`); optional separate sandbox VM via `SANDBOX_DOCKER_HOST` |
 
-Verified locally with `scripts/containment_test.py` on the Docker backend: all 8 attacks contained (keys absent, `rm` blocked by the read-only FS, loop killed at 10 s, fork bomb hits `EAGAIN`, 4 GB allocation OOM-killed, network unreachable, metadata and localhost requests blocked).
+Verified with `scripts/containment_test.py` on the Docker backend, locally and on the Vultr VM: all 8 attacks contained (keys absent, `rm` blocked by the read-only FS, loop killed at 10 s, fork bomb hits `EAGAIN`, 4 GB allocation OOM-killed, network unreachable, metadata and localhost requests blocked).
 
 ## Repository layout
 
