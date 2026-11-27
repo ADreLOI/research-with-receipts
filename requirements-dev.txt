@@ -1,2 +1,4 @@
 -r requirements.txt
 pytest>=8
+# The sandbox worker's search tests import it (it ships in the sandbox image).
+beautifulsoup4==4.12.3

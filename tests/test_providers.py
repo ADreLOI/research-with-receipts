@@ -94,7 +94,8 @@ def test_auto_picks_models_from_list():
         return httpx.Response(200, json=_reply("ok"))
 
     p = _provider(handler)
-    p.model, p._vision_disabled = "", False
+    # Clear models a local .env may set, so the pick comes from the list.
+    p.model, p.vision_model, p._vision_disabled = "", "", False
     assert asyncio.run(p.resolve_models()) == ("llama-3.3-70b-instruct", "Qwen2.5-VL-7B")
 
 
