@@ -25,7 +25,7 @@ Research agents are persuasive, and that's the problem: you can't tell a real ci
 
 - **Vultr Cloud Compute VM**: the FastAPI control plane, agent loop, receipts store, and the Docker host for sandboxes, behind Caddy.
 - **Vultr Serverless Inference**: all reasoning (OpenAI-compatible API), plus an optional vision model that checks each highlighted screenshot. The provider auto-picks models from `/v1/models`, retries with backoff and can switch to a fallback model.
-- **Vultr as the sandbox fabric**: sandboxes are containers on Vultr compute, never in the app process. One setting (`SANDBOX_DOCKER_HOST=ssh://...`) moves them to a separate throwaway Vultr VM.
+- **Vultr as the sandbox fabric**: sandboxes are containers on Vultr compute, never in the app process. `scripts/vultr_sandbox_vm.py` uses the Vultr API to create a dedicated sandbox VM (Docker, egress guard, SSH locked to the app VM, sandbox image built by cloud-init), points the app at it over SSH, and destroys it afterwards.
 
 ## Containment
 

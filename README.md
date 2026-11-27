@@ -14,7 +14,7 @@ Built for Vultr Meetup #42 (12h hackathon), Pattern B (sandboxed browser use) wi
 |---|---|
 | VM-based backend on Vultr | FastAPI control plane on a Vultr Cloud Compute VM (`deploy/setup_vultr_vm.sh`) |
 | LLM calls via Vultr Serverless Inference | `app/providers/vultr.py`, OpenAI-compatible `https://api.vultrinference.com/v1`; optional vision model checks screenshots |
-| Sandboxes never inside the app process | Browser and Python run in Docker containers started per run; optionally on a separate VM via `SANDBOX_DOCKER_HOST=ssh://...` |
+| Sandboxes never inside the app process | Browser and Python run in Docker containers started per run; optionally on a separate throwaway Vultr VM created through the Vultr API (`scripts/vultr_sandbox_vm.py`) |
 | Multi-step agentic workflow | Plan → search → open pages → screenshot → compute → draft → capture evidence → verify |
 | Real executed results | Real Chromium screenshots, real page text, real Python stdout; nothing is "described" |
 | Containment moment | Built-in **Containment test** button + hostile demo page (prompt injection, SSRF, blocking `alert()`) |
@@ -156,7 +156,20 @@ pip install -r requirements-dev.txt && pytest -q
    The script installs Docker, Caddy (automatic HTTPS when you pass a domain), the egress guard, the sandbox image and a systemd service running as an unprivileged `rwr` user.
 4. Open `http://<vm-ip>` (or your domain) and press **Run containment test**.
 
-Optional hardening: `INSTALL_GVISOR=1 sudo -E bash deploy/setup_vultr_vm.sh` and set `SANDBOX_RUNTIME=runsc`. To keep sandboxes off the app VM entirely, create a second VM with Docker, add the app VM's SSH key, build the image there with `SANDBOX_DOCKER_HOST=ssh://root@<sandbox-ip> ./scripts/build_sandbox.sh` and set the same variable in `.env`.
+Optional hardening: `INSTALL_GVISOR=1 sudo -E bash deploy/setup_vultr_vm.sh` and set `SANDBOX_RUNTIME=runsc`.
+
+### Vultr as the sandbox fabric (separate throwaway VM)
+
+To keep sandboxes off the app VM entirely, let the Vultr API create a dedicated sandbox VM. Cloud-init installs Docker and the egress guard, locks SSH to the app VM's IP, and builds the sandbox image there; the app then drives it over SSH.
+
+```bash
+echo "VULTR_API_KEY=..." | sudo tee -a /opt/rwr/.env      # Vultr portal > Account > API (allow the app VM's IP)
+sudo -u rwr /opt/rwr/.venv/bin/python scripts/vultr_sandbox_vm.py create --write-env   # about 5-10 min
+sudo systemctl restart rwr
+sudo -u rwr /opt/rwr/.venv/bin/python scripts/vultr_sandbox_vm.py destroy --all         # after the event
+```
+
+The Vultr API key stays on the app VM. The sandbox VM holds no keys at all. This script has not been run against the live Vultr API yet, so try it early, and keep the local Docker setup as the default if it misbehaves.
 
 ## Demo safety net: record and replay
 
