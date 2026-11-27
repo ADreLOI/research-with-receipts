@@ -5,6 +5,7 @@
 - **Repository:** https://github.com/ADreLOI/research-with-receipts (branch `claude/research-with-receipts`)
 - **Live demo:** `<public URL on the Vultr VM>`
 - **Video (2 min):** `<video URL>`
+- **Access code (only if the page asks for one):** `<APP_ACCESS_CODE, or delete this line if none is set>`
 - **Team:** `<names>`
 
 ## Tagline
