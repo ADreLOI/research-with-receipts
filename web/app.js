@@ -667,8 +667,16 @@ function openSheet(dlg, fromEl) {
 // Captured text with the quoted sentence marked. Long pages are cut to a
 // window around the quote so the evidence is visible without scrolling.
 function findQuote(text, quote) {
-  const words = String(quote || "").match(/[\p{L}\p{N}]+/gu) || [];
+  const wordsOf = (s) => String(s || "").match(/[\p{L}\p{N}]+/gu) || [];
+  const words = wordsOf(quote);
   const re = (ws) => new RegExp(ws.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("[^\\p{L}\\p{N}]+"), "iu");
+  // A markdown table row: its cells appear in order on the page, with other
+  // columns possibly in between (mirrors the server's row matching).
+  const cells = String(quote || "").split("|").map((c) => c.trim()).filter((c) => c && !/^:?-{2,}:?$/.test(c));
+  if ((String(quote).match(/\|/g) || []).length >= 2 && cells.length >= 2) {
+    const m = new RegExp(cells.map((c) => re(wordsOf(c)).source).join("[\\s\\S]{0,160}?"), "iu").exec(text);
+    if (m) return [m.index, m.index + m[0].length];
+  }
   for (const ws of [words, words.slice(0, 10)]) {
     if (ws.length < 3) continue;
     const m = re(ws).exec(text);

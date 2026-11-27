@@ -137,7 +137,7 @@ The suite runs offline with mock model and sandbox doubles. It covers the agent 
 
 1. **Problem (0:00).** Research agents cite pages they never read, and an agent that browses the open web reads hostile input all day.
 2. **Product (0:15).** Ask a question and watch the plan unfold: every page visit and every line of code runs in a throwaway container on Vultr, with reasoning on Vultr Serverless Inference.
-3. **Receipts (0:35).** Each claim cites receipts. Open one to see the exact sentence highlighted on the real page, then press Verify to recompute its SHA-256 in the browser.
+3. **Receipts (0:35).** Each claim is labelled verified, partial or unverified. Hover it to light up its receipts, open one to see the exact sentence highlighted on the real page and marked in the captured text, then press Verify to recompute its SHA-256 in the browser.
 4. **Numbers (0:55).** Arithmetic is real Python in a network-less container. When it fails, the error goes back and the model fixes it, visibly.
-5. **Containment (1:10).** The hostile page tries prompt injection and SSRF. The injection is flagged, the requests are blocked, and the containment test shows eight attacks absorbed with the host untouched.
+5. **Containment (1:10).** The hostile page hides an instruction in 2-pixel white text and fires requests at the metadata service and localhost. The injection is flagged, the requests are blocked, and a quote from hidden text is labelled text-only evidence instead of being passed off as visible. Then the containment test throws eight attacks at a fresh sandbox and all eight are absorbed with the host untouched.
 6. **Close (1:45).** An agent that executes safely and shows its work, built end to end on Vultr.
