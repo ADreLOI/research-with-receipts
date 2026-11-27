@@ -13,9 +13,9 @@ Never paste keys into chat or commit them. They only go into `/opt/rwr/.env` on 
 ```bash
 ssh root@<VM_IP>
 
-# Private repo: add a read-only deploy key (or make the repo public first).
+# Private repo: add a deploy key. Tick "Allow write access" so step 4 can push the recordings.
 ssh-keygen -t ed25519 -N "" -f ~/.ssh/rwr_deploy && cat ~/.ssh/rwr_deploy.pub
-#   -> GitHub repo > Settings > Deploy keys > Add (read-only), then:
+#   -> GitHub repo > Settings > Deploy keys > Add, then:
 GIT_SSH_COMMAND="ssh -i ~/.ssh/rwr_deploy -o StrictHostKeyChecking=accept-new" \
   git clone -b claude/research-with-receipts git@github.com:ADreLOI/research-with-receipts.git /opt/rwr
 
@@ -29,8 +29,19 @@ sudo systemctl restart rwr
 
 ## 3. Smoke test (~5 min)
 
+One command checks everything and prints a report that is safe to paste into the chat (no secrets):
+
 ```bash
 cd /opt/rwr
+sudo -u rwr .venv/bin/python scripts/doctor.py                   # ends with "summary: N pass, N warn, 0 fail"
+```
+
+It covers the config, Docker and the image, Vultr Inference (model list, a JSON round trip and one real agent
+step), the sandbox tools from inside a container, the running app and the recordings. A `WARN` on
+`sandbox.search` means DuckDuckGo blocks the VM's IP and the Wikipedia fallback is used; the demo still works,
+or set `SEARCH_PROVIDER=brave` with `BRAVE_SEARCH_API_KEY`. Then the individual steps:
+
+```bash
 sudo -u rwr .venv/bin/python scripts/check_inference.py          # must end with "chat: OK"
 curl -s localhost:8000/api/health | python3 -m json.tool | head -20
 sudo -u rwr .venv/bin/python scripts/containment_test.py         # expect 8x CONTAINED
@@ -46,7 +57,10 @@ The scripts read `APP_ACCESS_CODE` and `PUBLIC_BASE_URL` from `.env`. Then open 
 cd /opt/rwr
 sudo -u rwr .venv/bin/python scripts/record_demo.py
 git config --global --add safe.directory /opt/rwr     # the checkout is owned by the rwr user
-git add demo/cassettes && git commit -m "Record demo cassettes on the VM" && git push   # needs a key with write access
+git config --global user.name "rwr VM" && git config --global user.email "vm@rwr.invalid"
+git add demo/cassettes && git commit -m "Record demo cassettes on the VM"
+export GIT_SSH_COMMAND="ssh -i ~/.ssh/rwr_deploy"
+git pull --rebase origin claude/research-with-receipts && git push origin HEAD:claude/research-with-receipts
 ```
 
 ## 5. Optional: sandboxes on a separate Vultr VM
