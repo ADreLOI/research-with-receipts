@@ -32,7 +32,11 @@ Diagram source: [`docs/architecture.svg`](docs/architecture.svg).
 | Prompt injection | Content fenced as untrusted, injection flagged in the live log, and there is nothing to leak |
 | Kernel escape | Optional gVisor runtime (`SANDBOX_RUNTIME=runsc`) or sandboxes on a separate throwaway Vultr VM (`scripts/vultr_sandbox_vm.py`) |
 
-Every run streams its timeline over Server-Sent Events. Any run can be exported as a zip with an offline verifier, and any recorded run can be replayed through the same pipeline, labelled as a replay.
+Every run streams its timeline over Server-Sent Events. Any recorded run can be replayed through the same pipeline, labelled as a replay. **Receipts .zip** exports a run with every receipt, an offline report and a verifier that needs only Python:
+
+```bash
+unzip receipts-<run-id>.zip -d run && cd run && python verify_bundle.py   # recomputes every SHA-256, then prints e.g. "8/8 receipts verified"
+```
 
 ## Requirements
 
@@ -137,7 +141,7 @@ The suite runs offline with mock model and sandbox doubles. It covers the agent 
 
 1. **Problem (0:00).** Research agents cite pages they never read, and an agent that browses the open web reads hostile input all day.
 2. **Product (0:15).** Ask a question and watch the plan unfold: every page visit and every line of code runs in a throwaway container on Vultr, with reasoning on Vultr Serverless Inference.
-3. **Receipts (0:35).** Each claim is labelled verified, partial or unverified. Hover it to light up its receipts, open one to see the exact sentence highlighted on the real page and marked in the captured text, then press Verify to recompute its SHA-256 in the browser.
+3. **Receipts (0:35).** Each claim is labelled verified, partial or unverified. Hover it to light up its receipts, open one to see the exact sentence highlighted on the real page and marked in the captured text, then press **Verify SHA-256** to recompute the hash in the browser.
 4. **Numbers (0:55).** Arithmetic is real Python in a network-less container. When it fails, the error goes back and the model fixes it, visibly.
 5. **Containment (1:10).** The hostile page hides an instruction in 2-pixel white text and fires requests at the metadata service and localhost. The injection is flagged, the requests are blocked, and a quote from hidden text is labelled text-only evidence instead of being passed off as visible. Then the containment test throws eight attacks at a fresh sandbox and all eight are absorbed with the host untouched.
-6. **Close (1:45).** An agent that executes safely and shows its work, built end to end on Vultr.
+6. **Close (1:45).** Download **Receipts .zip** and the evidence leaves with you, checkable offline. An agent that executes safely and shows its work, built end to end on Vultr.
