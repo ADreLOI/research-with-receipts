@@ -221,7 +221,17 @@ function setBusy(busy, label = "Research") {
     : `<span>Research</span>${icon("arrow")}`;
 }
 
+// A problem with the question itself is shown under the question box.
+function askHint(text = "") {
+  const el = $("#ask-hint");
+  el.textContent = text;
+  el.hidden = !text;
+  if (text) $("#q").focus();
+}
+
 async function startRun(question, mode) {
+  if (question.trim().length < 5) { askHint("Ask a full question, at least 5 characters."); return; }
+  askHint();
   state.lastQuestion = question;
   if (accessRequired() && !accessCode()) { showAccess("missing"); return; }
   setBusy(true, mode === "replay" ? "Starting replay" : "Starting sandbox");
@@ -234,9 +244,10 @@ async function startRun(question, mode) {
     setBusy(false);
     // A missing or wrong code is fixed in place, next to the question.
     if (e.status === 401) { rejectAccess(); return; }
-    const msg = e.status === 422 ? "Please ask a question of at least 5 characters." : e.message;
+    if (e.status === 422) { askHint("Ask a full question, at least 5 characters."); return; }
+    const msg = e.message;
     setMode("run");
-    renderError({ question, error: `Could not start the run: ${msg}` });
+    renderError({ question, title: "The run didn't start", error: msg });
   }
 }
 
@@ -253,7 +264,7 @@ async function openRun(id) {
   let run;
   try { run = await api(`/api/runs/${id}`); } catch {
     state.lastQuestion = "";
-    renderError({ question: "", error: "This run doesn't exist any more. It may have been created on another server." });
+    renderError({ question: "", title: "Run not found", error: "This run doesn't exist any more. It may have been created on another server." });
     return;
   }
   state.run = run;
@@ -352,10 +363,11 @@ function renderError(run) {
   const rec = recordingFor(run.question || state.lastQuestion);
   const actions = [];
   if (run.question || state.lastQuestion) actions.push(`<button type="button" class="btn" id="err-retry">${icon("retry")}Try again live</button>`);
+  else actions.push(`<button type="button" class="btn" id="err-home">${icon("arrow")}Ask a new question</button>`);
   if (rec) actions.push(`<button type="button" class="btn accent" id="err-replay">Replay the recorded run</button>`);
   $("#answer").innerHTML = `${run.id ? questionHeader(run) : ""}
     <div class="state-card error">
-      <h2>That run didn't finish.</h2>
+      <h2>${esc(run.title || "That run didn't finish")}</h2>
       <p>${esc(run.error || "Unknown error")}</p>
       ${actions.length ? `<div class="actions">${actions.join("")}</div>` : ""}
       ${rec ? `<small>A recording of this question exists, so the demo can continue offline. Replays are labelled as such.</small>` : ""}
@@ -363,6 +375,7 @@ function renderError(run) {
   const q = run.question || state.lastQuestion;
   const r1 = $("#err-retry"); if (r1) r1.onclick = () => startRun(q, "live");
   const r2 = $("#err-replay"); if (r2) r2.onclick = () => startRun(q, "replay");
+  const r3 = $("#err-home"); if (r3) r3.onclick = goHome;
 }
 
 function citeChips(text) {
@@ -812,14 +825,15 @@ document.addEventListener("click", (e) => {
 $$("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target === d) d.close(); }));
 $("#history").addEventListener("click", (e) => { if (e.target.closest("a")) $("#history-sheet").close(); });
 $("#ask").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#q").value.trim(); if (q) startRun(q); });
-$("#q").addEventListener("input", () => { autosize(); syncReplayToggle(); });
+$("#q").addEventListener("input", () => { autosize(); syncReplayToggle(); if (!$("#ask-hint").hidden) askHint(); });
 $("#access").addEventListener("input", () => {
   if ($("#access-row").classList.contains("invalid")) showAccess();
 });
 $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("#ask").requestSubmit(); });
 $("#btn-contain").addEventListener("click", runContainment);
 $("#btn-history").addEventListener("click", () => { loadHistory(); $("#history-sheet").showModal(); });
-$(".brand").addEventListener("click", (e) => { e.preventDefault(); history.pushState(null, "", location.pathname); route(); });
+function goHome() { history.pushState(null, "", location.pathname); route(); }
+$(".brand").addEventListener("click", (e) => { e.preventDefault(); goHome(); });
 window.addEventListener("hashchange", route);
 window.addEventListener("popstate", route);
 

@@ -203,6 +203,8 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .access-row.invalid .access-label .ic { color: var(--bad); }
 .access-row.invalid .access { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
 .access-row.invalid .access-msg { color: var(--bad); font-weight: 500; }
+.ask-hint { margin: 0; padding: 0 18px 14px; font-size: 13px; font-weight: 500; color: var(--bad); }
+body.is-run .ask-hint { flex: 0 0 100%; padding-top: 0; }
 .access-row.nudge { animation: nudge 300ms var(--ease); }
 @keyframes nudge { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .kbd-hint { display: inline-flex; gap: 3px; margin-left: auto; color: var(--muted); }
