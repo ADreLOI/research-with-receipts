@@ -294,6 +294,7 @@ function renderRun(run) {
         <span class="badge ${v.status}" title="${statusHelp(v.status)}">${v.status}</span>
         <div class="text">${i + 1}. ${esc(cl.text)} ${chips}</div>
         ${cl.quote ? `<blockquote><mark>${esc(cl.quote)}</mark></blockquote>` : ""}
+        ${cl.quote_snapped ? `<div class="snapped">The model's quote wasn't verbatim${cl.quote_original ? `: “${esc(short(cl.quote_original, 160))}”` : ""}. Showing the closest real sentence from the source instead, so this claim can be at most partial.</div>` : ""}
         <div class="why">quote match ${(v.quote_score * 100).toFixed(0)}%${vision}${cl.evidence_id ? " · highlighted screenshot " + esc(cl.evidence_id) : ""}</div>
       </div>
       ${thumb}
@@ -399,7 +400,7 @@ function renderSandbox(sb, phase) {
 
 function iconFor(ev) {
   return { run_started: "▶", sandbox_created: "⬢", step: "◆", tool_result: ev.ok ? "✓" : "✗", retry: "↻",
-    containment: "⛨", guard: "⚠", evidence: "◎", verification: "✔", drafted: "✎", final: "★", fallback: "⚠",
+    containment: "⛨", guard: "⚠", snap: "≈", evidence: "◎", verification: "✔", drafted: "✎", final: "★", fallback: "⚠",
     sandbox_destroyed: "⬡", error: "✗", run_finished: "■" }[ev.type] || "•";
 }
 
@@ -437,6 +438,7 @@ function addEvent(ev, live) {
       break;
     case "retry": li.classList.add("guard"); title = "self-heal retry"; body = esc(ev.message); break;
     case "fallback": li.classList.add("guard"); title = "model fallback"; body = esc(ev.message); break;
+    case "snap": li.classList.add("guard"); title = "quote snapped to source"; body = esc(ev.message); break;
     case "containment": li.classList.add("contain"); title = "containment"; body = esc(ev.message); break;
     case "guard": li.classList.add("guard"); title = "prompt injection detected"; body = esc(ev.message); break;
     case "evidence": body = esc(ev.message); break;

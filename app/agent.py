@@ -22,7 +22,7 @@ from .normalize import normalize_action, normalize_claims
 from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
 from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
                         make_live_provider)
-from .receipts import Receipt, match_quote, verify_claim
+from .receipts import Receipt, match_quote, snap_quote, verify_claim
 from .runs import Run
 from .sandbox import Sandbox, ToolResult, make_sandbox
 from .sandbox.replay_sandbox import RecordingSandbox, ReplaySandbox
@@ -217,6 +217,10 @@ class Agent:
         shots = 0
         done: dict[tuple[str, str], str] = {}
         for idx, claim in enumerate(claims):
+            if snap_quote(claim, self.run.receipts):
+                self.run.emit("snap", claim=idx, message=f"Claim {idx + 1}: the model's quote is not verbatim; "
+                                                         "highlighting the closest real sentence instead "
+                                                         "(capped at partial).")
             quote = str(claim.get("quote", ""))
             for rid in claim.get("receipt_ids", []):
                 rec = self.run.receipts.get(str(rid))

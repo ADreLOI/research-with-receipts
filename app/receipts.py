@@ -128,6 +128,53 @@ def match_quote(quote: str, text: str) -> tuple[float, str]:
     return round(min(1.0, matched / len(q)) * 0.5 + (longest.size / len(q)) * 0.5, 3), span
 
 
+_SENT_SPLIT = re.compile(r"(?<=[.!?])\s+|\n+")
+
+
+def best_sentence(target: str, text: str) -> tuple[str, float]:
+    """Sentence of `text` most similar to `target` (ratio 0..1), used to snap paraphrased quotes."""
+    t = normalize(target)
+    if not t:
+        return "", 0.0
+    best, best_ratio = "", 0.0
+    for sent in _SENT_SPLIT.split(text or ""):
+        sent = sent.strip()
+        if len(sent) < 12:
+            continue
+        ratio = difflib.SequenceMatcher(None, t, normalize(sent), autojunk=False).ratio()
+        if ratio > best_ratio:
+            best, best_ratio = sent, ratio
+    return best, round(best_ratio, 3)
+
+
+def snap_quote(claim: dict[str, Any], store: "ReceiptStore") -> bool:
+    """Replace a paraphrased or missing quote with the closest real sentence from a cited page.
+
+    The original is kept in quote_original and the claim can then reach at
+    most "partial": the source says something close, not what was quoted.
+    """
+    quote = str(claim.get("quote", "")).strip()
+    target = quote or str(claim.get("text", ""))
+    for rid in claim.get("receipt_ids", []):
+        rec = store.get(str(rid))
+        if rec is None or rec.kind != "page":
+            continue
+        if quote:
+            score, _ = match_quote(quote, rec.text)
+            if score >= 0.9:
+                return False  # already verbatim enough
+            if score < 0.5:
+                continue
+        sentence, ratio = best_sentence(target, rec.text)
+        if sentence and ratio >= 0.6:
+            claim["quote_original"] = quote
+            claim["quote"] = sentence
+            claim["quote_snapped"] = True
+            claim["snap_ratio"] = ratio
+            return True
+    return False
+
+
 def verify_claim(claim: dict[str, Any], store: ReceiptStore) -> dict[str, Any]:
     """Mechanically check a claim against the receipts it cites."""
     quote = str(claim.get("quote", ""))
@@ -144,7 +191,7 @@ def verify_claim(claim: dict[str, Any], store: ReceiptStore) -> dict[str, Any]:
         checks.append({"receipt_id": r.id, "exists": True, "kind": r.kind, "score": score, "span": span[:200],
                        "highlight_found": r.highlight_found if r.kind == "page" else None})
     visual = any(c.get("highlight_found") or c.get("kind") == "code" for c in checks if c.get("score", 0) >= 0.9)
-    if best >= 0.9 and visual:
+    if best >= 0.9 and visual and not claim.get("quote_snapped"):
         status = "verified"
     elif best >= 0.6:
         status = "partial"

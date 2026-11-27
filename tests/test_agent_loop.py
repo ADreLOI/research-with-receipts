@@ -159,3 +159,18 @@ def test_page_content_is_fenced_as_untrusted(monkeypatch):
 def test_non_dict_args_do_not_crash(monkeypatch, bad_args):
     run, _, _ = run_with(monkeypatch, [{"thought": "t", "action": "search", "args": bad_args}, final()])
     assert run.status == "done", run.error
+
+
+def test_paraphrased_quote_is_snapped_to_source_and_capped(monkeypatch):
+    paraphrase = "gVisor includes an OCI runtime named runsc which integrates with Docker plus Kubernetes."
+    run, _, _ = run_with(monkeypatch, [
+        act("screenshot", url=GVISOR),
+        final(claim("gVisor ships runsc.", ["R1"], paraphrase), claim("No quote given.", ["R1"], "")),
+    ])
+    a, b = run.answer["claims"]
+    assert a["quote_snapped"] and a["quote"] == GVISOR_QUOTE and a["quote_original"] == paraphrase
+    assert a["verification"]["status"] == "partial"
+    assert run.receipts.get(a["evidence_id"]).highlight_found
+    assert events(run, "snap")
+    # A claim without a quote only snaps if a sentence is genuinely close to the claim text.
+    assert not b.get("quote_snapped") and b["verification"]["status"] == "unverified"
