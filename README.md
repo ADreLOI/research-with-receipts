@@ -234,6 +234,6 @@ Two people, one day. Suggested split: one person owns the VM, sandbox image and 
 
 ## Limitations and next steps
 
-* DuckDuckGo's HTML endpoint can rate-limit datacenter IPs; the worker falls back to Wikipedia search, and `SEARCH_PROVIDER=brave` gives a sturdier option.
+* DuckDuckGo can return empty pages to datacenter IPs; the worker then tries DuckDuckGo Lite and Wikipedia (with a keyword-only retry), and `SEARCH_PROVIDER=brave` gives a sturdier option.
 * Quote matching is lexical. A paraphrased claim with an exact quote can still overstate the source; the vision check and the visible quote help a human judge.
 * Next: one throwaway Vultr instance per run through the Vultr API, a human approval gate before any form submit, and signing the exported receipt bundles with a server key.

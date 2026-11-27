@@ -42,7 +42,7 @@ Research agents are persuasive, and that's the problem: you can't tell a real ci
 - Live action log over Server-Sent Events, phase stepper, receipts gallery with claim-to-receipt hover linking, run history with shareable links.
 - Record and replay: every live run is recorded, and any run can be replayed offline through the same pipeline, clearly labelled as a replay. Our demo can't be killed by venue Wi-Fi.
 - Optional access code for the public URL, health endpoint, systemd service, one-shot VM setup script.
-- 68 automated tests that run offline (agent loop, receipts integrity, providers, replay, API), plus `scripts/doctor.py`, a one-command health report for the deployed VM.
+- 73 automated tests that run offline (agent loop, receipts integrity, providers, replay, API), plus `scripts/doctor.py`, a one-command health report for the deployed VM.
 
 ## Architecture
 
@@ -62,7 +62,7 @@ Python 3.12, FastAPI, httpx, Docker, Playwright + Chromium, pandas/matplotlib in
 ## Challenges
 
 - Highlighting the exact quote on arbitrary pages: line breaks and inline tags defeat naive text search, so the sandbox matches against whitespace-free DOM text and maps back to a DOM range.
-- Keeping search keyless inside the sandbox: DuckDuckGo HTML from the sandbox with a Wikipedia fallback; keyed search, if enabled, runs in the control plane.
+- Keeping search keyless inside the sandbox: datacenter IPs often get empty pages from search engines, so the sandbox tries DuckDuckGo HTML, then DuckDuckGo Lite, then Wikipedia with a keyword-only retry; keyed search (Brave), if enabled, runs in the control plane.
 - Making the demo deterministic without faking it: record/replay at the model and sandbox boundaries, with receipts and verification recomputed and replays labelled.
 
 ## What's next

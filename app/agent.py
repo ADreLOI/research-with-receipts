@@ -179,7 +179,10 @@ class Agent:
                 return f"ERROR: {res.error}"
             lines = [f"- title: {r['title']}\n  url: {r['url']}\n  snippet: {r['snippet'][:300]}"
                      for r in res.data.get("results", [])]
-            return "Search results (leads only, not receipts):\n" + ("\n".join(lines) or "(no results)")
+            if not lines:
+                return ("Search results: (no results). Try a shorter keyword query, or fetch a page you can name "
+                        "directly, e.g. https://en.wikipedia.org/wiki/<Topic>.")
+            return "Search results (leads only, not receipts):\n" + "\n".join(lines)
 
         if action in {"fetch", "screenshot"}:
             url = str(args.get("url", "")).strip()

@@ -87,46 +87,94 @@ def clean_text(text: str) -> str:
 
 # ---------------------------------------------------------------- search
 
+_STOP = set("a an and are as at be by did do does for from how in into is it its of on or that the their them "
+            "these this to was were what when where which who whom why will with today now currently".split())
+
+
+def keywords(query: str, limit: int = 6) -> str:
+    """'What share of the world do the 3 biggest countries hold?' -> 'share world 3 biggest countries hold'."""
+    words = [w.strip("?!.,;:'\"()") for w in query.split()]
+    return " ".join([w for w in words if w and w.lower() not in _STOP][:limit])
+
+
+def _ddg_html(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
+    r = httpx.post("https://html.duckduckgo.com/html/", data={"q": query},
+                   headers={"User-Agent": UA}, timeout=15, follow_redirects=True)
+    out: list[dict] = []
+    for res in BeautifulSoup(r.text, "html.parser").select(".result"):
+        a = res.select_one("a.result__a")
+        if not a:
+            continue
+        href = a.get("href", "")
+        if "uddg=" in href:
+            href = urllib.parse.parse_qs(urllib.parse.urlparse(href).query).get("uddg", [href])[0]
+        if not href.startswith("http") or "duckduckgo.com/y.js" in href:
+            continue
+        snip = res.select_one(".result__snippet")
+        out.append({"title": a.get_text(" ", strip=True), "url": href,
+                    "snippet": snip.get_text(" ", strip=True) if snip else ""})
+        if len(out) >= n:
+            break
+    return out
+
+
+def _ddg_lite(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
+    r = httpx.post("https://lite.duckduckgo.com/lite/", data={"q": query},
+                   headers={"User-Agent": UA}, timeout=15, follow_redirects=True)
+    soup = BeautifulSoup(r.text, "html.parser")
+    snippets = [td.get_text(" ", strip=True) for td in soup.select("td.result-snippet")]
+    out: list[dict] = []
+    for i, a in enumerate(soup.select("a.result-link")):
+        href = a.get("href", "")
+        if "uddg=" in href:
+            href = urllib.parse.parse_qs(urllib.parse.urlparse(href).query).get("uddg", [href])[0]
+        if not href.startswith("http") or "duckduckgo.com/y.js" in href:
+            continue
+        out.append({"title": a.get_text(" ", strip=True), "url": href,
+                    "snippet": snippets[i] if i < len(snippets) else ""})
+        if len(out) >= n:
+            break
+    return out
+
+
+def _wikipedia(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
+    r = httpx.get("https://en.wikipedia.org/w/api.php",
+                  params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": n},
+                  headers={"User-Agent": UA}, timeout=15)
+    out = []
+    for item in r.json().get("query", {}).get("search", []):
+        title = item["title"]
+        out.append({"title": title, "snippet": BeautifulSoup(item.get("snippet", ""), "html.parser").get_text(),
+                    "url": "https://en.wikipedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))})
+    return out
+
+
 def search(req: dict) -> dict:
+    """Keyless search from inside the sandbox. Datacenter IPs often get an
+    empty page from DuckDuckGo, so try its two endpoints, then Wikipedia
+    (with a keyword-only retry, since long questions match nothing there)."""
     import httpx
     from bs4 import BeautifulSoup
 
     query = str(req.get("query", ""))[:300]
     n = int(req.get("max_results", 6))
-    results: list[dict] = []
-    provider = "duckduckgo"
-    try:
-        r = httpx.post("https://html.duckduckgo.com/html/", data={"q": query},
-                       headers={"User-Agent": UA}, timeout=15, follow_redirects=True)
-        soup = BeautifulSoup(r.text, "html.parser")
-        for res in soup.select(".result"):
-            a = res.select_one("a.result__a")
-            if not a:
-                continue
-            href = a.get("href", "")
-            if "uddg=" in href:
-                href = urllib.parse.parse_qs(urllib.parse.urlparse(href).query).get("uddg", [href])[0]
-            if not href.startswith("http") or "duckduckgo.com/y.js" in href:
-                continue
-            snip = res.select_one(".result__snippet")
-            results.append({"title": a.get_text(" ", strip=True), "url": href,
-                            "snippet": snip.get_text(" ", strip=True) if snip else ""})
-            if len(results) >= n:
-                break
-    except Exception as exc:  # noqa: BLE001 - fall back to Wikipedia
-        provider = f"duckduckgo failed ({type(exc).__name__}), wikipedia"
-    if not results:
-        provider = "wikipedia" if provider == "duckduckgo" else provider
-        r = httpx.get("https://en.wikipedia.org/w/api.php",
-                      params={"action": "query", "list": "search", "srsearch": query,
-                              "format": "json", "srlimit": n},
-                      headers={"User-Agent": UA}, timeout=15)
-        for item in r.json().get("query", {}).get("search", []):
-            title = item["title"]
-            snippet = BeautifulSoup(item.get("snippet", ""), "html.parser").get_text()
-            results.append({"title": title, "snippet": snippet,
-                            "url": "https://en.wikipedia.org/wiki/" + urllib.parse.quote(title.replace(" ", "_"))})
-    return {"provider": provider, "query": query, "results": results}
+    attempts = [("duckduckgo", _ddg_html, query), ("duckduckgo-lite", _ddg_lite, query),
+                ("wikipedia", _wikipedia, query)]
+    short = keywords(query)
+    if short and short.lower() != query.lower():
+        attempts.append(("wikipedia (keywords)", _wikipedia, short))
+    tried: list[str] = []
+    for name, fn, q in attempts:
+        try:
+            results = fn(httpx, BeautifulSoup, q, n)
+        except Exception as exc:  # noqa: BLE001 - try the next engine
+            tried.append(f"{name}: {type(exc).__name__}")
+            continue
+        if results:
+            provider = name if not tried else f"{name} (after {', '.join(tried)})"
+            return {"provider": provider, "query": query, "results": results}
+        tried.append(f"{name}: no results")
+    return {"provider": "none (" + ", ".join(tried) + ")", "query": query, "results": []}
 
 
 # ---------------------------------------------------------------- fetch

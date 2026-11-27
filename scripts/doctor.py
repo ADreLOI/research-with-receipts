@@ -132,9 +132,9 @@ async def check_sandbox() -> None:
         res = await sb.search("Amsterdam population", 5)
         provider = res.data.get("provider", "")
         n = len(res.data.get("results", []))
-        status = "PASS" if res.ok and n and provider == "duckduckgo" else "WARN" if res.ok and n else "FAIL"
+        status = "PASS" if res.ok and n and provider.startswith("duckduckgo") else "WARN" if res.ok and n else "FAIL"
         report(status, "sandbox.search", f"{provider or res.error} -> {n} results ({res.duration_s:.1f}s)"
-               + ("; DuckDuckGo blocked this IP, Wikipedia fallback in use" if status == "WARN" else ""))
+               + ("; DuckDuckGo gave nothing from this IP, Wikipedia fallback in use" if status == "WARN" else ""))
         res = await sb.fetch("https://en.wikipedia.org/wiki/Amsterdam")
         report("PASS" if res.ok else "FAIL", "sandbox.fetch",
                f"{len(res.data.get('text', ''))} chars ({res.duration_s:.1f}s)" if res.ok else res.error[:200])
