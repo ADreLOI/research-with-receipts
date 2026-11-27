@@ -4,6 +4,7 @@
 FROM mcr.microsoft.com/playwright/python:v1.49.1-noble
 
 RUN pip install --no-cache-dir \
+        playwright==1.49.1 \
         httpx==0.27.2 \
         beautifulsoup4==4.12.3 \
         pandas==2.2.3 \

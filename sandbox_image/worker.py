@@ -163,31 +163,48 @@ def fetch(req: dict) -> dict:
 HIGHLIGHT_JS = r"""
 (args) => {
   const [quote, stamp] = args;
-  const norm = s => (s || '').replace(/\s+/g, ' ').trim();
-  const q = norm(quote);
+  // Compare text with all whitespace removed so line breaks, inline tags and
+  // indentation in the DOM do not defeat the match.
+  const fold = (c) => ({'‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-'}[c] || c);
+  const squash = (s) => Array.from(s || '').filter((c) => !/\s/.test(c)).map((c) => fold(c).toLowerCase()).join('');
+  const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode: (n) => (n.parentElement && !skip.has(n.parentElement.tagName)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
+  });
+  let flat = '';
+  const map = [];
+  while (walker.nextNode()) {
+    const n = walker.currentNode, v = n.nodeValue;
+    for (let i = 0; i < v.length; i++) {
+      if (/\s/.test(v[i])) continue;
+      flat += fold(v[i]).toLowerCase();
+      map.push([n, i]);
+    }
+  }
+  const words = (quote || '').trim().split(/\s+/).filter(Boolean);
   const cands = [];
-  if (q) {
-    cands.push(q);
-    const words = q.split(' ');
-    for (const k of [16, 10, 7, 5]) if (words.length > k) cands.push(words.slice(0, k).join(' '));
+  if (words.length) {
+    cands.push(words.join(' '));
+    for (const k of [20, 14, 10, 7, 5]) if (words.length > k) cands.push(words.slice(0, k).join(' '));
+    for (const k of [14, 10, 7]) if (words.length > k) cands.push(words.slice(-k).join(' '));
   }
   let found = '', rects = [];
   for (const c of cands) {
-    if (c.length < 8) continue;
-    window.getSelection().removeAllRanges();
-    if (window.find(c, false, false, true, false, false, false)) {
-      const sel = window.getSelection();
-      if (sel.rangeCount) {
-        const range = sel.getRangeAt(0);
-        const el = range.startContainer.parentElement;
-        if (el) el.scrollIntoView({block: 'center'});
-        rects = Array.from(range.getClientRects());
-        found = c;
-        break;
-      }
-    }
+    const q = squash(c);
+    if (q.length < 12) continue;
+    const idx = flat.indexOf(q);
+    if (idx < 0) continue;
+    const [sn, so] = map[idx];
+    const [en, eo] = map[idx + q.length - 1];
+    const range = document.createRange();
+    range.setStart(sn, so);
+    range.setEnd(en, eo + 1);
+    const el = sn.parentElement;
+    if (el) el.scrollIntoView({block: 'center'});
+    rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+    found = c;
+    break;
   }
-  window.getSelection().removeAllRanges();
   for (const r of rects) {
     const d = document.createElement('div');
     Object.assign(d.style, {position: 'absolute', left: (r.left + window.scrollX - 2) + 'px',
@@ -201,7 +218,7 @@ HIGHLIGHT_JS = r"""
   Object.assign(b.style, {position: 'fixed', left: '0', right: '0', bottom: '0', padding: '6px 10px',
     font: '12px/1.3 monospace', color: '#fff', background: 'rgba(20, 20, 30, 0.85)', zIndex: 2147483647});
   document.body.appendChild(b);
-  return {found: !!found, matched: found};
+  return {found: !!found && rects.length > 0, matched: found};
 }
 """
 

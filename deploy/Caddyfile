@@ -1,0 +1,7 @@
+__SITE__ {
+	encode gzip
+	reverse_proxy 127.0.0.1:8000 {
+		# Server-Sent Events: do not buffer.
+		flush_interval -1
+	}
+}

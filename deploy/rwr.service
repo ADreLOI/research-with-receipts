@@ -1,0 +1,20 @@
+[Unit]
+Description=Research with Receipts (control plane)
+After=network-online.target docker.service
+Requires=docker.service
+
+[Service]
+User=rwr
+Group=rwr
+WorkingDirectory=__APP_DIR__
+EnvironmentFile=__APP_DIR__/.env
+ExecStart=__APP_DIR__/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --proxy-headers
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
