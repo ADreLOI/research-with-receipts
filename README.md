@@ -6,7 +6,20 @@ A receipt is evidence captured inside the sandbox at the moment the agent read i
 
 Built for Vultr Meetup #42 (12h hackathon), Pattern B (sandboxed browser use) with Pattern A (sandboxed code execution) as a tool.
 
+**Live demo:** _link added after deployment_ · **Video:** _link added after recording_ · **Submission text:** [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
+
+![Containment test: eight attacks thrown at a fresh Docker sandbox, all contained](docs/img/containment-test.png)
+
 ---
+
+## Try it in 60 seconds
+
+1. Open the live demo and click one of the example questions on the left. The live action log on the right streams every step: model decisions, sandbox calls, screenshots, Python runs.
+2. When the answer lands, hover a claim: the receipts it cites light up. Each claim shows its verdict (`verified`, `partial`, `unverified`), the exact quote and the highlighted screenshot.
+3. Click a receipt, then **Verify SHA-256**: your browser recomputes the hash from the captured content and compares it with the one recorded at capture time.
+4. Press **Run containment test** in the header: eight hostile actions hit a fresh sandbox (key theft, `rm -rf /`, fork bomb, memory bomb, exfiltration, cloud-metadata SSRF...) and each one is absorbed.
+5. Ask the **Containment (hostile page)** example: the page hides a prompt injection, SSRF requests and a blocking `alert()`. The guard flags the injection in the log, and the answer reports it as a finding.
+6. **Download receipts** gives a zip with every receipt, an offline report and `verify_bundle.py`, so anyone can check the hashes without trusting the server.
 
 ## What it shows
 
@@ -94,7 +107,8 @@ sandbox_image/
 web/                 index.html, app.js, styles.css (no build step)
 demo/hostile.html    deliberately hostile page for the containment moment
 demo/cassettes/      recorded runs that can be replayed offline
-scripts/             dev server, image build, demo runner, recorder, containment test, inference check
+scripts/             dev server, image build, demo runner, recorder, containment test, inference check,
+                     doctor.py (one paste-safe health report), vultr_sandbox_vm.py (Vultr API)
 deploy/              Vultr VM setup script, systemd unit, Caddyfile
 tests/               pytest suite (runs offline in mock mode)
 docs/                2-minute demo script and submission text
@@ -154,7 +168,10 @@ pip install -r requirements-dev.txt && pytest -q
    ```
 
    The script installs Docker, Caddy (automatic HTTPS when you pass a domain), the egress guard, the sandbox image and a systemd service running as an unprivileged `rwr` user.
-4. Open `http://<vm-ip>` (or your domain) and press **Run containment test**.
+4. Check the whole stack in one go: `sudo -u rwr .venv/bin/python scripts/doctor.py`. It prints PASS / WARN / FAIL for the config, Docker, Vultr Inference (including one real agent step), the sandbox tools, the app and the recordings, and never prints a key.
+5. Open `http://<vm-ip>` (or your domain) and press **Run containment test**.
+
+No domain? `sudo bash deploy/setup_vultr_vm.sh <ip-with-dashes>.sslip.io` gives a free hostname with automatic HTTPS. The step-by-step version, including the Vultr console clicks, is [`docs/DEPLOY_CHECKLIST.md`](docs/DEPLOY_CHECKLIST.md).
 
 Optional hardening: `INSTALL_GVISOR=1 sudo -E bash deploy/setup_vultr_vm.sh` and set `SANDBOX_RUNTIME=runsc`.
 

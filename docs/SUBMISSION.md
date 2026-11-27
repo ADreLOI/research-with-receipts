@@ -1,8 +1,8 @@
 # Submission: Research with Receipts
 
-> Fill in the three links before submitting. Everything else is ready to paste.
+> Fill in the remaining links before submitting. Everything else is ready to paste.
 
-- **Repository:** `<GitHub repo URL>`
+- **Repository:** https://github.com/ADreLOI/research-with-receipts (branch `claude/research-with-receipts`)
 - **Live demo:** `<public URL on the Vultr VM>`
 - **Video (2 min):** `<video URL>`
 - **Team:** `<names>`
@@ -42,7 +42,7 @@ Research agents are persuasive, and that's the problem: you can't tell a real ci
 - Live action log over Server-Sent Events, phase stepper, receipts gallery with claim-to-receipt hover linking, run history with shareable links.
 - Record and replay: every live run is recorded, and any run can be replayed offline through the same pipeline, clearly labelled as a replay. Our demo can't be killed by venue Wi-Fi.
 - Optional access code for the public URL, health endpoint, systemd service, one-shot VM setup script.
-- 51 automated tests that run offline (agent loop, receipts integrity, providers, replay, API).
+- 68 automated tests that run offline (agent loop, receipts integrity, providers, replay, API), plus `scripts/doctor.py`, a one-command health report for the deployed VM.
 
 ## Architecture
 
