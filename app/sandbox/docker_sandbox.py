@@ -106,6 +106,9 @@ class DockerSandbox(Sandbox):
 
     async def start(self, run_id: str) -> SandboxInfo:
         self.run_id = run_id
+        if not await docker_available():
+            raise RuntimeError("docker daemon unreachable" + (f" at {settings.sandbox_docker_host}"
+                                                               if settings.sandbox_docker_host else ""))
         if not await image_present(settings.sandbox_image):
             raise RuntimeError(f"sandbox image {settings.sandbox_image!r} not found; run scripts/build_sandbox.sh")
         name = f"rwr-{run_id[:12]}-browser"

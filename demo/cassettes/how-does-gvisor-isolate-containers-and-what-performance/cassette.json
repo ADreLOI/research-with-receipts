@@ -1,0 +1,245 @@
+{
+ "version": 1,
+ "question": "How does gVisor isolate containers, and what performance cost does it have compared to runc?",
+ "recorded_at": "2026-11-27T11:32:27Z",
+ "llm": "mock policy (no VULTR_INFERENCE_API_KEY)",
+ "sandbox": {
+  "backend": "mock",
+  "isolated": false,
+  "container_id": "mock-20261127",
+  "image": "fixtures",
+  "runtime": "local subprocess",
+  "limits": {
+   "browser": {
+    "memory": "1g",
+    "cpus": "1.0",
+    "pids": 512,
+    "network": "egress only, private ranges blocked",
+    "timeout_s": 45.0
+   },
+   "code": {
+    "memory": "256m",
+    "cpus": "0.5",
+    "pids": 64,
+    "network": "none",
+    "timeout_s": 10.0
+   }
+  },
+  "notes": "DEV ONLY: canned pages, python runs locally with rlimits. Use SANDBOX_BACKEND=docker."
+ },
+ "note": "Seed recording made offline: mock sandbox (fixture pages, SVG screenshots) and the scripted mock policy. Re-record on the VM with scripts/record_demo.py for real pages and a real model.",
+ "aliases": [],
+ "llm_turns": [
+  {
+   "text": "{\"thought\": \"Start with a web search.\", \"action\": \"search\", \"args\": {\"query\": \"How does gVisor isolate containers, and what performance cost does it have compared to runc?\"}}",
+   "latency_s": 0.0
+  },
+  {
+   "text": "{\"thought\": \"Open source #1 and capture a screenshot.\", \"action\": \"screenshot\", \"args\": {\"url\": \"https://mock.local/linux-containers\"}}",
+   "latency_s": 0.0
+  },
+  {
+   "text": "{\"thought\": \"Open source #2 and capture a screenshot.\", \"action\": \"screenshot\", \"args\": {\"url\": \"https://mock.local/gvisor\"}}",
+   "latency_s": 0.0
+  },
+  {
+   "text": "{\"thought\": \"Use the sandbox to compute a quick statistic over the sources.\", \"action\": \"python\", \"args\": {\"code\": \"words = {\\\"R1\\\": 79, \\\"R2\\\": 66}\\ntotal = sum(words.values())\\nprint(f'Captured {len(words)} sources totalling {total} words')\\n\"}}",
+   "latency_s": 0.0
+  },
+  {
+   "text": "{\"thought\": \"I have enough receipts to answer.\", \"action\": \"final\", \"args\": {\"summary\": \"Mock answer assembled from 2 captured sources [R1] [R2]. Set VULTR_INFERENCE_API_KEY to let a model on Vultr Serverless Inference write the answer.\", \"claims\": [{\"text\": \"Because containers share the host kernel, a kernel vulnerability can let a process escape the container.\", \"receipt_ids\": [\"R1\"], \"quote\": \"Because containers share the host kernel, a kernel vulnerability can let a process escape the container.\"}, {\"text\": \"Dropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do.\", \"receipt_ids\": [\"R1\"], \"quote\": \"Dropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do.\"}, {\"text\": \"Workloads that make many system calls can run slower under gVisor than under the default runc runtime.\", \"receipt_ids\": [\"R2\"], \"quote\": \"Workloads that make many system calls can run slower under gVisor than under the default runc runtime.\"}, {\"text\": \"gVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface.\", \"receipt_ids\": [\"R2\"], \"quote\": \"gVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface.\"}, {\"text\": \"Captured 2 sources totalling 145 words\", \"receipt_ids\": [\"R3\"], \"quote\": \"Captured 2 sources totalling 145 words\"}]}}",
+   "latency_s": 0.0
+  }
+ ],
+ "vision": [],
+ "tool_calls": [
+  {
+   "tool": "search",
+   "args": {
+    "query": "How does gVisor isolate containers, and what performance cost does it have compared to runc?"
+   },
+   "ok": true,
+   "data": {
+    "provider": "mock fixtures",
+    "query": "How does gVisor isolate containers, and what performance cost does it have compared to runc?",
+    "results": [
+     {
+      "title": "Linux containers explained (mock fixture)",
+      "url": "https://mock.local/linux-containers",
+      "snippet": "A container is an ordinary Linux process that the kernel isolates using namespaces and cgroups."
+     },
+     {
+      "title": "gVisor overview (mock fixture)",
+      "url": "https://mock.local/gvisor",
+      "snippet": "gVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface."
+     },
+     {
+      "title": "Prompt injection (mock fixture)",
+      "url": "https://mock.local/prompt-injection",
+      "snippet": "Prompt injection is an attack in which text controlled by an attacker is interpreted as instructions by a language model."
+     }
+    ]
+   },
+   "error": "",
+   "duration_s": 0.2,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/linux-containers",
+    "highlight": ""
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/linux-containers",
+    "status": 200,
+    "title": "Linux containers explained (mock fixture)",
+    "text": "Linux containers explained\n\nA container is an ordinary Linux process that the kernel isolates using namespaces and cgroups.\nNamespaces give the process its own view of process IDs, mounts, network interfaces and hostnames.\nControl groups (cgroups) limit how much CPU, memory and how many process IDs a container may use.\nBecause containers share the host kernel, a kernel vulnerability can let a process escape the container.\nDropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do.",
+    "captured_at": "2026-11-27T11:32:28Z",
+    "highlight_found": false,
+    "highlight_matched": "",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc2.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/gvisor",
+    "highlight": ""
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/gvisor",
+    "status": 200,
+    "title": "gVisor overview (mock fixture)",
+    "text": "gVisor overview\n\ngVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface.\nIt provides an additional layer of isolation between running applications and the host operating system.\ngVisor includes an OCI runtime called runsc that integrates with Docker and Kubernetes.\nWorkloads that make many system calls can run slower under gVisor than under the default runc runtime.",
+    "captured_at": "2026-11-27T11:32:28Z",
+    "highlight_found": false,
+    "highlight_matched": "",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc3.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  },
+  {
+   "tool": "python",
+   "args": {
+    "code": "words = {\"R1\": 79, \"R2\": 66}\ntotal = sum(words.values())\nprint(f'Captured {len(words)} sources totalling {total} words')\n"
+   },
+   "ok": true,
+   "data": {
+    "exit_code": 0,
+    "stdout": "Captured 2 sources totalling 145 words\n",
+    "stderr": "",
+    "timed_out": false,
+    "duration_s": 0.018,
+    "files": [],
+    "captured_at": "2026-11-27T11:32:28Z"
+   },
+   "error": "",
+   "duration_s": 0.02,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/linux-containers",
+    "highlight": "Because containers share the host kernel, a kernel vulnerability can let a process escape the container."
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/linux-containers",
+    "status": 200,
+    "title": "Linux containers explained (mock fixture)",
+    "text": "Linux containers explained\n\nA container is an ordinary Linux process that the kernel isolates using namespaces and cgroups.\nNamespaces give the process its own view of process IDs, mounts, network interfaces and hostnames.\nControl groups (cgroups) limit how much CPU, memory and how many process IDs a container may use.\nBecause containers share the host kernel, a kernel vulnerability can let a process escape the container.\nDropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do.",
+    "captured_at": "2026-11-27T11:32:29Z",
+    "highlight_found": true,
+    "highlight_matched": "Because containers share the host kernel, a kernel vulnerabi",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc5.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/linux-containers",
+    "highlight": "Dropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do."
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/linux-containers",
+    "status": 200,
+    "title": "Linux containers explained (mock fixture)",
+    "text": "Linux containers explained\n\nA container is an ordinary Linux process that the kernel isolates using namespaces and cgroups.\nNamespaces give the process its own view of process IDs, mounts, network interfaces and hostnames.\nControl groups (cgroups) limit how much CPU, memory and how many process IDs a container may use.\nBecause containers share the host kernel, a kernel vulnerability can let a process escape the container.\nDropping Linux capabilities and enabling no-new-privileges reduces what a compromised process can do.",
+    "captured_at": "2026-11-27T11:32:29Z",
+    "highlight_found": true,
+    "highlight_matched": "Dropping Linux capabilities and enabling no-new-privileges r",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc6.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/gvisor",
+    "highlight": "Workloads that make many system calls can run slower under gVisor than under the default runc runtime."
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/gvisor",
+    "status": 200,
+    "title": "gVisor overview (mock fixture)",
+    "text": "gVisor overview\n\ngVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface.\nIt provides an additional layer of isolation between running applications and the host operating system.\ngVisor includes an OCI runtime called runsc that integrates with Docker and Kubernetes.\nWorkloads that make many system calls can run slower under gVisor than under the default runc runtime.",
+    "captured_at": "2026-11-27T11:32:29Z",
+    "highlight_found": true,
+    "highlight_matched": "Workloads that make many system calls can run slower under g",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc7.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  },
+  {
+   "tool": "screenshot",
+   "args": {
+    "url": "https://mock.local/gvisor",
+    "highlight": "gVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface."
+   },
+   "ok": true,
+   "data": {
+    "url": "https://mock.local/gvisor",
+    "status": 200,
+    "title": "gVisor overview (mock fixture)",
+    "text": "gVisor overview\n\ngVisor is an application kernel, written in Go, that implements a substantial portion of the Linux system call interface.\nIt provides an additional layer of isolation between running applications and the host operating system.\ngVisor includes an OCI runtime called runsc that integrates with Docker and Kubernetes.\nWorkloads that make many system calls can run slower under gVisor than under the default runc runtime.",
+    "captured_at": "2026-11-27T11:32:30Z",
+    "highlight_found": true,
+    "highlight_matched": "gVisor is an application kernel, written in Go, that impleme",
+    "blocked_requests": [],
+    "image_mime": "image/svg+xml",
+    "image_file": "tc8.svg"
+   },
+   "error": "",
+   "duration_s": 0.4,
+   "contained": ""
+  }
+ ]
+}

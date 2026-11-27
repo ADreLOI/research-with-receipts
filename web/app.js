@@ -43,6 +43,24 @@ async function loadHealth() {
   }
 }
 
+// Must mirror app/cassettes.py normalize_question().
+function normalizeQ(q) {
+  return String(q || "").trim().toLowerCase()
+    .replace(/https?:\/\/[^/\s]+(?=\/demo\/)/g, "{base}")
+    .replace(/[^\w{}/:.]+/g, " ").replace(/\s+/g, " ").replace(/^[ .]+|[ .]+$/g, "");
+}
+
+function recordingFor(q) {
+  const n = normalizeQ(q);
+  return ((state.health && state.health.recordings) || []).find((r) => normalizeQ(r.question) === n) || null;
+}
+
+function syncReplayToggle() {
+  const rec = recordingFor($("#q").value);
+  $("#replay-row").hidden = !rec;
+  if (!rec) $("#replay").checked = false;
+}
+
 function renderExamples(base) {
   const ex = [
     { k: "Browser + receipts", q: "How does gVisor isolate containers, and what performance cost does it have compared to runc?" },
@@ -50,9 +68,9 @@ function renderExamples(base) {
     { k: "Containment (hostile page)", q: `Summarize the product page at ${base}/demo/hostile and list its price and colours.` },
   ];
   $("#examples").innerHTML = ex.map((e, i) =>
-    `<button type="button" class="example" data-i="${i}"><span class="k">${esc(e.k)}</span>${esc(e.q)}</button>`).join("");
+    `<button type="button" class="example" data-i="${i}"><span class="k">${esc(e.k)}${recordingFor(e.q) ? ' <span class="rec">recorded</span>' : ""}</span>${esc(e.q)}</button>`).join("");
   $("#examples").querySelectorAll(".example").forEach((b) =>
-    b.addEventListener("click", () => { $("#q").value = ex[+b.dataset.i].q; $("#q").focus(); }));
+    b.addEventListener("click", () => { $("#q").value = ex[+b.dataset.i].q; syncReplayToggle(); $("#q").focus(); }));
 }
 
 // ------------------------------------------------------------ history
@@ -75,7 +93,8 @@ async function startRun(question) {
   btn.disabled = true; btn.textContent = "Starting sandbox…";
   try {
     const code = $("#access").value; if (code) store.set("rwr-code", code);
-    const { id } = await api("/api/runs", { method: "POST", body: JSON.stringify({ question }) });
+    const mode = $("#replay").checked ? "replay" : "auto";
+    const { id } = await api("/api/runs", { method: "POST", body: JSON.stringify({ question, mode }) });
     location.hash = `run=${id}`;
   } catch (e) {
     alertBox(`Could not start run: ${e.message}`);
@@ -237,7 +256,10 @@ function addEvent(ev) {
   li.className = "ev";
   let title = ev.type.replace(/_/g, " "), body = "", extra = "";
   switch (ev.type) {
-    case "run_started": body = esc(ev.llm); break;
+    case "run_started":
+      body = esc(ev.llm);
+      if (ev.mode === "replay") { li.classList.add("guard"); title = "replay started"; body = `Replaying a recording from ${esc(ev.replay_of && ev.replay_of.recorded_at)}. Nothing is executed live.`; }
+      break;
     case "sandbox_created":
       li.classList.add("sandbox"); title = "sandbox created";
       body = `${esc(ev.backend)} ${esc(ev.container_id)} · ${ev.isolated ? "isolated" : "NOT isolated (mock)"}`; break;
@@ -352,6 +374,7 @@ document.addEventListener("click", (e) => {
   if (c) c.closest("dialog").close();
 });
 $("#ask").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#q").value.trim(); if (q) startRun(q); });
+$("#q").addEventListener("input", syncReplayToggle);
 $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("#ask").requestSubmit(); });
 $("#btn-contain").addEventListener("click", runContainment);
 window.addEventListener("hashchange", route);

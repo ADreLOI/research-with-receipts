@@ -119,6 +119,16 @@ class Settings:
     max_concurrent_runs: int = field(default_factory=lambda: _env_int("MAX_CONCURRENT_RUNS", 3))
     max_evidence_shots: int = field(default_factory=lambda: _env_int("MAX_EVIDENCE_SCREENSHOTS", 8))
 
+    # --- Demo safety net (record / replay) ---
+    # live: always run for real. replay: replay a recording whenever one
+    # matches the question. auto: run live, but replay when the live model
+    # is unavailable and a recording matches. Replays are always labelled.
+    demo_mode: str = field(default_factory=lambda: _env("DEMO_MODE", "auto").lower())
+    # Multiplier on recorded latencies during replay (0 = instant).
+    replay_speed: float = field(default_factory=lambda: _env_float("REPLAY_SPEED", 0.6))
+    # Record every live run into its run directory so it can be promoted.
+    record_runs: bool = field(default_factory=lambda: _env_bool("RECORD_RUNS", True))
+
     # --- Web app ---
     data_dir: Path = field(default_factory=lambda: Path(_env("DATA_DIR", str(ROOT / "data"))))
     public_base_url: str = field(default_factory=lambda: _env("PUBLIC_BASE_URL", "http://localhost:8000").rstrip("/"))

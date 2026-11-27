@@ -31,6 +31,8 @@ class Run:
     sandbox: dict[str, Any] = field(default_factory=dict)
     error: str = ""
     llm: str = ""
+    mode: str = "live"  # live | replay
+    replay_of: dict[str, Any] = field(default_factory=dict)
     receipts: ReceiptStore = field(init=False)
     _subs: list[asyncio.Queue] = field(default_factory=list, repr=False)
 
@@ -55,11 +57,12 @@ class Run:
 
     def summary(self) -> dict[str, Any]:
         return {"id": self.id, "question": self.question, "status": self.status, "created_at": self.created_at,
-                "n_receipts": len(self.receipts.items), "n_events": len(self.events)}
+                "mode": self.mode, "n_receipts": len(self.receipts.items), "n_events": len(self.events),
+                "has_recording": (self.dir / "cassette" / "cassette.json").is_file()}
 
     def public(self) -> dict[str, Any]:
         return {**self.summary(), "answer": self.answer, "sandbox": self.sandbox, "error": self.error,
-                "llm": self.llm, "events": self.events,
+                "llm": self.llm, "replay_of": self.replay_of, "events": self.events,
                 "receipts": [r.public() for r in self.receipts.items.values()]}
 
     def save(self) -> None:
@@ -94,7 +97,8 @@ class RunRegistry:
                 continue
             run = Run(id=data["id"], question=data["question"], created_at=data["created_at"], dir=path.parent,
                       status=data.get("status", "done"), events=data.get("events", []), answer=data.get("answer"),
-                      sandbox=data.get("sandbox", {}), error=data.get("error", ""), llm=data.get("llm", ""))
+                      sandbox=data.get("sandbox", {}), error=data.get("error", ""), llm=data.get("llm", ""),
+                      mode=data.get("mode", "live"), replay_of=data.get("replay_of", {}))
             if run.status in {"queued", "running"}:
                 run.status = "failed"
                 run.error = run.error or "server restarted during run"

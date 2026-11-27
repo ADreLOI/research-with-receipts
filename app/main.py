@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .agent import execute_run
+from .cassettes import library
 from .config import ROOT, settings
 from .containment import run_battery
 from .runs import registry
@@ -44,6 +45,12 @@ app = FastAPI(title="Research with Receipts", version="1.0", lifespan=lifespan)
 
 class RunRequest(BaseModel):
     question: str = Field(min_length=5, max_length=600)
+    # auto: follow DEMO_MODE. live: never replay. replay: require a recording.
+    mode: str = Field(default="auto", pattern="^(auto|live|replay)$")
+
+
+async def _live_available() -> bool:
+    return settings.llm_enabled
 
 
 def _check_code(code: str | None) -> None:
@@ -63,17 +70,33 @@ async def health() -> dict:
             "inference_base_url": settings.inference_base_url,
             "limits": settings.limits.as_dict(), "max_steps": settings.max_steps,
             "access_code_required": bool(settings.access_code),
+            "demo_mode": settings.demo_mode,
+            "recordings": [c.summary() for c in library.all()],
             "public_base_url": settings.public_base_url}
 
 
 @app.post("/api/runs")
 async def create_run(body: RunRequest, x_access_code: str | None = Header(default=None)) -> dict:
     _check_code(x_access_code)
-    run = registry.create(body.question.strip())
-    task = asyncio.create_task(execute_run(run))
+    question = body.question.strip()
+    cassette = library.find(question)
+    use_replay = False
+    if body.mode == "replay":
+        if cassette is None:
+            raise HTTPException(404, "no recording matches this question")
+        use_replay = True
+    elif body.mode == "auto" and cassette is not None:
+        use_replay = settings.demo_mode == "replay" or (settings.demo_mode == "auto" and not await _live_available())
+    run = registry.create(question)
+    task = asyncio.create_task(execute_run(run, cassette if use_replay else None))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
-    return {"id": run.id}
+    return {"id": run.id, "mode": "replay" if use_replay else "live"}
+
+
+@app.get("/api/recordings")
+async def list_recordings() -> list[dict]:
+    return [c.summary() for c in library.all()]
 
 
 @app.get("/api/runs")

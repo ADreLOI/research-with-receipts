@@ -76,20 +76,24 @@ app/
   main.py            FastAPI routes, SSE streams, static UI, hostile demo page
   agent.py           agent loop, tool dispatch, evidence pass, verification, mock policy
   prompts.py         system prompt and repair prompts
-  llm.py             Vultr Serverless Inference client (+ model auto-pick, vision check)
+  llm.py             shared helpers: robust JSON extraction from model replies
   receipts.py        receipt store, hashing, quote matching, claim verification
   runs.py            run registry, event bus, persistence
   containment.py     containment test battery
+  cassettes.py       record / replay of whole runs (demo safety net)
+  providers/         LLM provider interface: vultr, mock, replay (+ recording wrapper)
   config.py          all settings from env vars
   sandbox/
     base.py          Sandbox interface
     docker_sandbox.py hardened Docker backend (local or remote DOCKER_HOST)
     mock_sandbox.py  offline fixtures backend for dev and tests (NOT isolated)
+    replay_sandbox.py replay and recording wrappers at the sandbox boundary
 sandbox_image/
   Dockerfile         Playwright + Chromium + pandas/matplotlib, non-root
   worker.py          runs inside the container: search, fetch, screenshot, python
 web/                 index.html, app.js, styles.css (no build step)
 demo/hostile.html    deliberately hostile page for the containment moment
+demo/cassettes/      recorded runs that can be replayed offline
 scripts/             dev server, image build, demo runner, containment test, model list
 deploy/              Vultr VM setup script, systemd unit, Caddyfile
 tests/               pytest suite (runs offline in mock mode)
@@ -143,6 +147,18 @@ pip install -r requirements-dev.txt && pytest -q
 
 Optional hardening: `INSTALL_GVISOR=1 sudo -E bash deploy/setup_vultr_vm.sh` and set `SANDBOX_RUNTIME=runsc`. To keep sandboxes off the app VM entirely, create a second VM with Docker, add the app VM's SSH key, build the image there with `SANDBOX_DOCKER_HOST=ssh://root@<sandbox-ip> ./scripts/build_sandbox.sh` and set the same variable in `.env`.
 
+## Demo safety net: record and replay
+
+Live demos fail for boring reasons: venue Wi-Fi, a rate-limited search endpoint, a slow model. So every live run is **recorded** (model replies and sandbox results, screenshots included) into its run folder, and any good run can be **replayed** step by step through the same agent loop. Receipts, SHA-256 hashes and verification are recomputed during the replay, and the UI and API label it as a replay everywhere (log, sandbox panel, answer header).
+
+* Before the demo, on the VM: `python scripts/record_demo.py` runs the demo questions live and promotes them to `demo/cassettes/`. Commit that folder.
+* Promote any other run: `python scripts/promote_run.py <run_id>`.
+* In the UI, a question with a recording shows a **Replay the recorded run** checkbox, and the examples carry a `recorded` tag.
+* `DEMO_MODE=auto` (default) runs live, but falls back to the recording when the live model is unavailable. `DEMO_MODE=replay` always replays when a recording exists. `DEMO_MODE=live` never replays. `REPLAY_SPEED` scales recorded latencies (0 = instant).
+* Question matching ignores case, punctuation and the host in `/demo/...` URLs, so the hostile-page recording works on any deployment.
+
+The repo ships two seed recordings made before the event (the hostile page with real Docker and Chromium, and an offline mock run). Re-record them on the VM with the real model so the replays show the real thing.
+
 ## Configuration
 
 All settings are environment variables; see [`.env.example`](.env.example). The only secret is `VULTR_INFERENCE_API_KEY` (plus `BRAVE_SEARCH_API_KEY` if you choose Brave search). None of them is ever passed to a sandbox.
@@ -152,12 +168,13 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/api/health` | backend, model, sandbox mode and limits |
-| `POST` | `/api/runs` | start a run: `{"question": "..."}` (header `X-Access-Code` if configured) |
+| `POST` | `/api/runs` | start a run: `{"question": "...", "mode": "auto|live|replay"}` (header `X-Access-Code` if configured) |
 | `GET` | `/api/runs` | run history |
 | `GET` | `/api/runs/{id}` | run with answer, claims, verification, receipts, events |
 | `GET` | `/api/runs/{id}/events` | live Server-Sent Events stream |
 | `GET` | `/api/runs/{id}/receipts/{rid}` | full receipt (captured text, hash, code, stdout) |
 | `GET` | `/api/runs/{id}/receipts/{rid}/image` | receipt screenshot |
+| `GET` | `/api/recordings` | recorded runs available for replay |
 | `GET` | `/api/containment-test` | SSE stream of the containment battery |
 | `GET` | `/demo/hostile` | the hostile demo page |
 

@@ -7,6 +7,7 @@ browsing and code execution. Every tool call is an event on the run log.
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import logging
 import re
@@ -14,12 +15,15 @@ from typing import Any
 
 import httpx
 
+from .cassettes import Cassette, Recorder
 from .config import settings
-from .llm import LLMError, VultrInference, extract_json
+from .llm import LLMError, extract_json
 from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
+from .providers import LLMProvider, RecordingProvider, ReplayProvider, make_live_provider
 from .receipts import Receipt, match_quote, verify_claim
 from .runs import Run
 from .sandbox import Sandbox, ToolResult, make_sandbox
+from .sandbox.replay_sandbox import RecordingSandbox, ReplaySandbox
 
 log = logging.getLogger(__name__)
 
@@ -33,32 +37,29 @@ _run_slots = asyncio.Semaphore(settings.max_concurrent_runs)
 
 # ------------------------------------------------------------ policies
 
-class LLMPolicy:
-    """Decides the next action with a model on Vultr Serverless Inference."""
+class Policy:
+    """Turns the conversation into the next JSON action, whatever the provider."""
 
-    def __init__(self, question: str) -> None:
-        self.client = VultrInference()
+    def __init__(self, question: str, provider: LLMProvider) -> None:
+        self.provider = provider
         self.messages: list[dict[str, Any]] = [
             {"role": "system", "content": SYSTEM_PROMPT.format(max_steps=settings.max_steps)},
             {"role": "user", "content": f"Question: {question}"},
         ]
-
-    async def label(self) -> str:
-        model, vision = await self.client.resolve_models()
-        return f"vultr:{model}" + (f" (vision: {vision})" if vision else "")
 
     async def next_action(self, force_final: bool = False) -> dict[str, Any]:
         if force_final:
             self.messages.append({"role": "user", "content": FORCE_FINAL})
         last_err = ""
         for _ in range(3):
-            raw = await self.client.chat(self.messages)
+            raw = await self.provider.chat(self.messages)
             self.messages.append({"role": "assistant", "content": raw})
             try:
                 action = extract_json(raw)
                 if not isinstance(action.get("action"), str):
                     raise ValueError("missing 'action'")
-                action.setdefault("args", {})
+                if not isinstance(action.get("args"), dict):
+                    action["args"] = {}
                 return action
             except (ValueError, json.JSONDecodeError) as exc:
                 last_err = str(exc)
@@ -67,73 +68,6 @@ class LLMPolicy:
 
     def observe(self, step: int, tool: str, text: str) -> None:
         self.messages.append({"role": "user", "content": f"Observation for step {step} ({tool}):\n{text}"})
-
-
-class MockPolicy:
-    """Deterministic stand-in for the LLM so the full loop runs offline."""
-
-    def __init__(self, question: str) -> None:
-        self.question = question
-        self.phase = 0
-        self.leads: list[str] = []
-        self.pages: list[dict[str, str]] = []
-        self.code_receipt = ""
-        self.code_stdout = ""
-        url = re.search(r"https?://\S+", question)
-        self.direct_url = url.group(0).rstrip(").,") if url else ""
-
-    async def label(self) -> str:
-        return "mock policy (no VULTR_INFERENCE_API_KEY)"
-
-    async def next_action(self, force_final: bool = False) -> dict[str, Any]:
-        self.phase += 1
-        if self.direct_url and not self.pages and self.phase == 1:
-            return {"thought": "The question names a URL, so I open it directly.", "action": "screenshot",
-                    "args": {"url": self.direct_url}}
-        if not self.leads and not self.direct_url and self.phase == 1:
-            return {"thought": "Start with a web search.", "action": "search", "args": {"query": self.question}}
-        if not force_final and len(self.pages) < min(2, len(self.leads) or 1) and self.leads:
-            url = self.leads[len(self.pages)]
-            return {"thought": f"Open source #{len(self.pages) + 1} and capture a screenshot.",
-                    "action": "screenshot", "args": {"url": url}}
-        if not force_final and self.pages and not self.code_receipt:
-            words = {p["receipt"]: len(p["text"].split()) for p in self.pages}
-            code = (f"words = {json.dumps(words)}\n"
-                    "total = sum(words.values())\n"
-                    "print(f'Captured {len(words)} sources totalling {total} words')\n")
-            return {"thought": "Use the sandbox to compute a quick statistic over the sources.",
-                    "action": "python", "args": {"code": code}}
-        return {"thought": "I have enough receipts to answer.", "action": "final", "args": self._final()}
-
-    def _final(self) -> dict[str, Any]:
-        qwords = {w for w in re.findall(r"[a-z]{4,}", self.question.lower())}
-        claims, cites = [], []
-        for p in self.pages:
-            sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n", p["text"]) if len(s.strip()) > 40]
-            if not sentences:
-                continue
-            ranked = sorted(sentences, key=lambda s: -len(qwords & set(re.findall(r"[a-z]{4,}", s.lower()))))
-            for s in ranked[:2]:
-                claims.append({"text": s, "receipt_ids": [p["receipt"]], "quote": s})
-            cites.append(f"[{p['receipt']}]")
-        if self.code_receipt:
-            claims.append({"text": self.code_stdout.strip(), "receipt_ids": [self.code_receipt],
-                           "quote": self.code_stdout.strip()})
-        summary = (f"Mock answer assembled from {len(self.pages)} captured sources {' '.join(cites)}. "
-                   "Set VULTR_INFERENCE_API_KEY to let a model on Vultr Serverless Inference write the answer.")
-        return {"summary": summary, "claims": claims}
-
-    def observe(self, step: int, tool: str, text: str) -> None:
-        if tool == "search":
-            self.leads = re.findall(r"url: (\S+)", text)
-        elif tool in {"fetch", "screenshot"} and "receipt_id:" in text:
-            rid = re.search(r"receipt_id: (R\d+)", text).group(1)
-            body = text.split("<untrusted_content>", 1)[-1].split("</untrusted_content>", 1)[0]
-            self.pages.append({"receipt": rid, "text": body})
-        elif tool == "python" and "receipt_id:" in text:
-            self.code_receipt = re.search(r"receipt_id: (R\d+)", text).group(1)
-            m = re.search(r"stdout:\n(.*?)\nstderr:", text, re.S)
-            self.code_stdout = m.group(1) if m else ""
 
 
 # ------------------------------------------------------------ tools
@@ -152,13 +86,28 @@ async def brave_search(query: str, n: int) -> ToolResult:
 
 
 class Agent:
-    def __init__(self, run: Run) -> None:
+    def __init__(self, run: Run, cassette: Cassette | None = None) -> None:
         self.run = run
-        self.policy: LLMPolicy | MockPolicy = LLMPolicy(run.question) if settings.llm_enabled else MockPolicy(
-            run.question)
+        self.cassette = cassette
+        self.replay = cassette is not None
+        self.recorder: Recorder | None = None
+        if self.replay:
+            self.provider: LLMProvider = ReplayProvider(cassette)
+        else:
+            self.provider = make_live_provider()
+            if settings.record_runs:
+                self.recorder = Recorder(run.question)
+                self.provider = RecordingProvider(self.provider, self.recorder)
+        self.policy = Policy(run.question, self.provider)
         self.sandbox: Sandbox | None = None
         self.sandbox_label = ""
         self.retries = 0
+
+    async def _make_sandbox(self) -> Sandbox:
+        if self.cassette is not None:
+            return ReplaySandbox(self.cassette)
+        inner = await make_sandbox()
+        return RecordingSandbox(inner, self.recorder) if self.recorder else inner
 
     # -- helpers
 
@@ -180,8 +129,11 @@ class Agent:
         run = self.run
         if action == "search":
             query = str(args.get("query", ""))[:300]
-            if settings.search_provider == "brave" and settings.brave_api_key:
+            if settings.search_provider == "brave" and settings.brave_api_key and not self.replay:
                 res = await brave_search(query, 6)
+                if self.recorder:
+                    self.recorder.tool_call("search", {"query": query}, res.ok, res.data, res.error,
+                                            res.duration_s, res.contained)
             else:
                 res = await self.sandbox.search(query, 6)
             self._emit_tool(step, action, res, summary=f"{len(res.data.get('results', []))} results via "
@@ -286,19 +238,16 @@ class Agent:
                 break
 
     async def verify(self, claims: list[dict[str, Any]]) -> None:
-        vision = isinstance(self.policy, LLMPolicy)
         for idx, claim in enumerate(claims):
             ids = [str(r) for r in claim.get("receipt_ids", [])]
             if claim.get("evidence_id"):
                 ids.append(claim["evidence_id"])
             result = verify_claim({**claim, "receipt_ids": ids}, self.run.receipts)
             ev = self.run.receipts.get(claim.get("evidence_id", "")) if claim.get("evidence_id") else None
-            if vision and ev and ev.image_file and ev.image_mime != "image/svg+xml":
-                import base64
-
+            if ev and ev.image_file and ev.image_mime != "image/svg+xml":
                 img = base64.b64encode((self.run.receipts.dir / ev.image_file).read_bytes()).decode()
-                vc = await self.policy.client.vision_check(claim.get("text", ""), claim.get("quote", ""), img,
-                                                           ev.image_mime)
+                vc = await self.provider.vision_check(claim.get("text", ""), claim.get("quote", ""), img,
+                                                      ev.image_mime)
                 if vc:
                     result["vision"] = vc
                     if vc.get("supports") is False and result["status"] == "verified":
@@ -311,9 +260,13 @@ class Agent:
 
     async def run_loop(self) -> None:
         run = self.run
-        run.llm = await self.policy.label()
-        run.emit("run_started", question=run.question, llm=run.llm)
-        self.sandbox = await make_sandbox()
+        info_llm = await self.provider.describe()
+        run.llm = info_llm.label
+        run.mode = "replay" if self.replay else "live"
+        if self.cassette is not None:
+            run.replay_of = self.cassette.summary()
+        run.emit("run_started", question=run.question, llm=run.llm, mode=run.mode, replay_of=run.replay_of)
+        self.sandbox = await self._make_sandbox()
         info = await self.sandbox.start(run.id)
         run.sandbox = info.as_dict()
         self.sandbox_label = f"{info.backend}:{info.container_id}"
@@ -347,13 +300,16 @@ class Agent:
         finally:
             await self.sandbox.destroy()
             run.emit("sandbox_destroyed", container_id=info.container_id,
-                     message="Sandbox and all its state destroyed.")
+                     message="Replay finished; nothing was executed." if self.replay
+                     else "Sandbox and all its state destroyed.")
+            if self.recorder and run.answer is not None:
+                self.recorder.save(run.dir / "cassette", run.llm, run.sandbox)
 
 
-async def execute_run(run: Run) -> None:
+async def execute_run(run: Run, cassette: Cassette | None = None) -> None:
     async with _run_slots:
         run.status = "running"
-        agent = Agent(run)
+        agent = Agent(run, cassette)
         try:
             await asyncio.wait_for(agent.run_loop(), timeout=settings.run_timeout_s)
             run.status = "done"
