@@ -289,7 +289,12 @@ def run_python(req: dict) -> dict:
         stdout = (exc.stdout or b"").decode() if isinstance(exc.stdout, bytes) else (exc.stdout or "")
         stderr = f"TimeoutExpired: killed after {timeout}s"
     files = []
-    for name in sorted(os.listdir(f"{work}/out"))[:3]:
+    # The code may have deleted its own work dir (e.g. rm -rf /), so be tolerant.
+    try:
+        names = sorted(os.listdir(f"{work}/out"))[:3]
+    except OSError:
+        names = []
+    for name in names:
         fp = f"{work}/out/{name}"
         if name.lower().endswith((".png", ".jpg", ".jpeg", ".svg")) and os.path.getsize(fp) < 2_000_000:
             with open(fp, "rb") as fh:

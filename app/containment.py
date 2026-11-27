@@ -53,7 +53,7 @@ def _verdict(attack_id: str, ok: bool, data: dict[str, Any], error: str, contain
                 "memory cap enforced (MemoryError or OOM kill)")
     if attack_id == "network":
         return ("network reachable" not in out, "no network in the code sandbox")
-    return (not ok, error[:120] or "request blocked")
+    return (not ok, "blocked: private, loopback and link-local addresses are off limits" if not ok else "reachable")
 
 
 async def run_battery() -> AsyncIterator[dict[str, Any]]:

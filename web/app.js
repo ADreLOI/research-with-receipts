@@ -97,7 +97,7 @@ async function openRun(id) {
   try { run = await api(`/api/runs/${id}`); } catch { alertBox("Run not found."); return; }
   state.run = run;
   renderQuestion(run);
-  renderSandbox(run.sandbox, run.status);
+  renderSandbox(run.sandbox, run.status === "done" || run.status === "failed" ? "destroyed" : "running");
   loadHistory();
   if (run.status === "done" || run.status === "failed") {
     run.events.forEach(addEvent);
