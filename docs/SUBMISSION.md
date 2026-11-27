@@ -38,6 +38,7 @@ Research agents are persuasive, and that's the problem: you can't tell a real ci
 
 ## Production touches
 
+- One-click receipt bundle: a zip with every receipt, screenshot, an offline HTML report and a stdlib-only `verify_bundle.py` that recomputes every hash.
 - Live action log over Server-Sent Events, phase stepper, receipts gallery with claim-to-receipt hover linking, run history with shareable links.
 - Record and replay: every live run is recorded, and any run can be replayed offline through the same pipeline, clearly labelled as a replay. Our demo can't be killed by venue Wi-Fi.
 - Optional access code for the public URL, health endpoint, systemd service, one-shot VM setup script.
@@ -68,4 +69,4 @@ Python 3.12, FastAPI, httpx, Docker, Playwright + Chromium, pandas/matplotlib in
 
 - One Vultr instance per task through the Vultr API, created and destroyed by the control plane.
 - Approve-before-submit gates for any irreversible browser action.
-- Exportable, signed receipt bundles (zip with screenshots, text and a manifest of hashes).
+- Signing receipt bundles with a server key, so a bundle proves where it came from as well as that it is intact.

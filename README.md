@@ -198,6 +198,8 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 | `GET` | `/api/runs/{id}/events` | live Server-Sent Events stream |
 | `GET` | `/api/runs/{id}/receipts/{rid}` | full receipt (captured text, hash, code, stdout) |
 | `GET` | `/api/runs/{id}/receipts/{rid}/image` | receipt screenshot |
+| `GET` | `/api/runs/{id}/receipts/{rid}/verify` | recompute a receipt's SHA-256 server-side |
+| `GET` | `/api/runs/{id}/export` | zip bundle: manifest, receipts, screenshots, offline report, `verify_bundle.py` |
 | `GET` | `/api/recordings` | recorded runs available for replay |
 | `GET` | `/api/containment-test` | SSE stream of the containment battery |
 | `GET` | `/demo/hostile` | the hostile demo page |
@@ -216,4 +218,4 @@ Two people, one day. Suggested split: one person owns the VM, sandbox image and 
 
 * DuckDuckGo's HTML endpoint can rate-limit datacenter IPs; the worker falls back to Wikipedia search, and `SEARCH_PROVIDER=brave` gives a sturdier option.
 * Quote matching is lexical. A paraphrased claim with an exact quote can still overstate the source; the vision check and the visible quote help a human judge.
-* Next: one throwaway Vultr instance per run through the Vultr API, a human approval gate before any form submit, and signed receipt bundles (export a run as a zip with hashes).
+* Next: one throwaway Vultr instance per run through the Vultr API, a human approval gate before any form submit, and signing the exported receipt bundles with a server key.

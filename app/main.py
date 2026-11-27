@@ -8,7 +8,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -16,6 +16,7 @@ from .agent import execute_run
 from .cassettes import library
 from .config import ROOT, settings
 from .containment import run_battery
+from .export import build_bundle
 from .providers import live_status
 from .runs import registry
 from .sandbox import resolve_backend
@@ -124,6 +125,18 @@ async def get_receipt(run_id: str, rid: str) -> dict:
     if not rec:
         raise HTTPException(404, "receipt not found")
     return rec.public(include_text=True)
+
+
+@app.get("/api/runs/{run_id}/export")
+async def export_run(run_id: str) -> Response:
+    """Download the run as a zip: manifest, receipts, screenshots, offline report and verifier."""
+    run = registry.get(run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    if run.status not in {"done", "failed"}:
+        raise HTTPException(409, "run still in progress")
+    return Response(build_bundle(run), media_type="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="receipts-{run.id}.zip"'})
 
 
 @app.get("/api/runs/{run_id}/receipts/{rid}/verify")

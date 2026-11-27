@@ -89,3 +89,32 @@ def test_access_code_is_enforced(client):
 def test_hostile_page_is_served(client):
     html = client.get("/demo/hostile").text
     assert "ignore all previous instructions" in html and "169.254.169.254" in html
+
+
+def test_export_bundle_verifies_offline(client, tmp_path):
+    import io
+    import subprocess
+    import sys
+    import zipfile
+
+    r = client.post("/api/runs", json={"question": "How does gVisor isolate containers?", "mode": "live"})
+    run = _wait(client, r.json()["id"])
+    resp = client.get(f"/api/runs/{run['id']}/export")
+    assert resp.status_code == 200 and resp.headers["content-type"] == "application/zip"
+    zipfile.ZipFile(io.BytesIO(resp.content)).extractall(tmp_path)
+    names = {p.name for p in tmp_path.rglob("*")}
+    assert {"manifest.json", "report.html", "verify_bundle.py", "R1.json"} <= names
+    ok = subprocess.run([sys.executable, "-I", str(tmp_path / "verify_bundle.py"), str(tmp_path)],
+                        capture_output=True, text=True)
+    assert ok.returncode == 0, ok.stdout + ok.stderr
+    assert f"{len(run['receipts'])}/{len(run['receipts'])} receipts verified" in ok.stdout
+    # Tamper with one receipt: the verifier must catch it.
+    import json as _json
+
+    p = tmp_path / "receipts" / "R1.json"
+    data = _json.loads(p.read_text())
+    data["text"] = data["text"] + " (quietly edited)"
+    p.write_text(_json.dumps(data))
+    bad = subprocess.run([sys.executable, "-I", str(tmp_path / "verify_bundle.py"), str(tmp_path)],
+                         capture_output=True, text=True)
+    assert bad.returncode == 1 and "BAD R1" in bad.stdout

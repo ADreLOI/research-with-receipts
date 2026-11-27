@@ -309,6 +309,7 @@ function renderRun(run) {
       <span class="badge neutral">${(run.receipts || []).length} receipts</span>
       <span class="badge neutral">${a.retries || 0} self-heal retries</span>
       <span class="badge neutral" title="Model that planned this run">${esc(run.llm || "")}</span>
+      <a class="btn small-btn" href="/api/runs/${run.id}/export" download>Download receipts (.zip)</a>
     </div>
     <ol class="claims">${claims || '<li class="muted">The model returned no claims for this question.</li>'}</ol>`;
   renderReceipts(run);
