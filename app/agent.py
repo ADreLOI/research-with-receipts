@@ -22,7 +22,7 @@ from .normalize import normalize_action, normalize_claims
 from .prompts import FORCE_FINAL, QUOTE_REPAIR, REPAIR, SYSTEM_PROMPT
 from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
                         make_live_provider)
-from .receipts import Receipt, candidate_sentences, match_quote, snap_quote, verify_claim
+from .receipts import Receipt, candidate_sentences, match_quote, snap_quote, table_cells, verify_claim
 from .runs import Run
 from .sandbox import Sandbox, ToolResult, make_sandbox
 from .sandbox.replay_sandbox import RecordingSandbox, ReplaySandbox
@@ -318,7 +318,9 @@ class Agent:
                 shots += 1
                 self.run.emit("evidence", claim=idx, receipt_id=rec.id, message=f"Capturing highlighted "
                                                                                 f"screenshot for claim {idx + 1}")
-                res = await self.sandbox.screenshot(rec.url, highlight=quote)
+                # A markdown table row is highlighted as the page renders it.
+                target = (match_quote(quote, rec.text)[1] or quote) if table_cells(quote) else quote
+                res = await self.sandbox.screenshot(rec.url, highlight=target)
                 if res.ok:
                     ev = self._page_receipt(rec.step, "evidence", res, highlight=quote)
                     ev.evidence_for.append(idx)

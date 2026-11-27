@@ -116,8 +116,63 @@ def normalize(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
+_ALIGN = re.compile(r":?-{2,}:?")
+_DIGIT_SEP = re.compile(r"(?<=\d)[,\s](?=\d{3}(?!\d))")
+
+
+def table_cells(quote: str) -> list[str]:
+    """Cells of a markdown table row such as '| India | 1,463,865,525 | 17.8% |', else []."""
+    if quote.count("|") < 2:
+        return []
+    cells = [c.strip(" *`") for c in quote.strip().strip("|").split("|")]
+    return [c for c in cells if c and not _ALIGN.fullmatch(c)]
+
+
+_ROW_GAP = 12
+_TOKEN = re.compile(r"[^\W_]+(?:\.[^\W_]+)*%?")
+
+
+def _tokens(text: str) -> list[str]:
+    return _TOKEN.findall(_DIGIT_SEP.sub("", normalize(text)))
+
+
+def _match_row(cells: list[str], text: str) -> tuple[float, str]:
+    """Score a table row by how many of its cells appear in order, close together, on the page.
+
+    Pages render tables as cells separated by tabs or newlines, never as
+    markdown pipes, and numbers may lose their thousands separators. Up to
+    _ROW_GAP tokens may sit between two quoted cells (columns the quote left
+    out), so cells picked from rows far apart do not add up to a match.
+    """
+    toks = _tokens(text)
+    cts = [c for c in (_tokens(cell) for cell in cells) if c]
+    if not cts:
+        return 0.0, ""
+
+    def at(cell: list[str], p: int) -> bool:
+        return toks[p:p + len(cell)] == cell
+
+    best: tuple[float, str] = (0.0, "")
+    for k, first in enumerate(cts):
+        for start in (p for p in range(len(toks)) if at(first, p)):
+            matched, end = 1, start + len(first)
+            for cell in cts[k + 1:]:
+                q = next((q for q in range(end, min(end + _ROW_GAP + 1, len(toks))) if at(cell, q)), None)
+                if q is not None:
+                    matched, end = matched + 1, q + len(cell)
+            score = round(matched / len(cts), 3)
+            if score > best[0]:
+                best = (score, " ".join(toks[start:end]))
+            if score == 1.0:
+                return best
+    return best
+
+
 def match_quote(quote: str, text: str) -> tuple[float, str]:
     """Return (score 0..1, best matching span) of a quote inside text."""
+    cells = table_cells(quote)
+    if len(cells) >= 2:
+        return _match_row(cells, text)
     q, t = normalize(quote), normalize(text)
     if not q or not t:
         return 0.0, ""
