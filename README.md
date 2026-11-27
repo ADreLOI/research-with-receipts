@@ -97,7 +97,7 @@ demo/cassettes/      recorded runs that can be replayed offline
 scripts/             dev server, image build, demo runner, recorder, containment test, inference check
 deploy/              Vultr VM setup script, systemd unit, Caddyfile
 tests/               pytest suite (runs offline in mock mode)
-docs/                pitch outline and demo script
+docs/                2-minute demo script and submission text
 ```
 
 ## Quick start (local, no keys needed)
@@ -191,8 +191,9 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 
 ## Demo and pitch
 
-* Demo questions and the terminal runner: [`scripts/demo.py`](scripts/demo.py) (`python scripts/demo.py 1`)
-* 2-minute pitch outline and video shot list: [`docs/PITCH.md`](docs/PITCH.md)
+* Demo questions and the terminal runner (`python scripts/demo.py 1`) plus the recorder (`python scripts/record_demo.py`): [`scripts/demo.py`](scripts/demo.py), [`scripts/record_demo.py`](scripts/record_demo.py)
+* 2-minute demo script with timings, voice-over and fallback lines: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
+* Submission text, ready to paste: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
 
 ## Team
 
