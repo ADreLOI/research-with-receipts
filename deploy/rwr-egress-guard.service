@@ -1,0 +1,14 @@
+[Unit]
+Description=Research with Receipts: block sandbox egress to metadata and private ranges
+After=docker.service
+Requires=docker.service
+# Re-applied whenever Docker restarts.
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/rwr-egress-guard
+
+[Install]
+WantedBy=multi-user.target docker.service

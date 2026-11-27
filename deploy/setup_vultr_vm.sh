@@ -5,14 +5,15 @@
 # Afterwards edit /opt/rwr/.env (add VULTR_INFERENCE_API_KEY) and run:
 #   systemctl restart rwr
 set -euo pipefail
-# iptables-persistent and friends must not stop at interactive debconf prompts.
+# Never stop at interactive debconf prompts.
 export DEBIAN_FRONTEND=noninteractive
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DOMAIN="${1:-}"
 
 echo "==> packages"
 apt-get update -y
-apt-get install -y ca-certificates curl git python3-venv python3-pip ufw iptables-persistent
+# No iptables-persistent: on 24.04 it conflicts with ufw. The egress guard is a systemd unit instead.
+apt-get install -y ca-certificates curl git python3-venv python3-pip ufw
 
 echo "==> docker"
 if ! command -v docker >/dev/null; then
@@ -40,14 +41,13 @@ if [[ "${INSTALL_GVISOR:-0}" == "1" ]]; then
 fi
 
 echo "==> network guard: sandboxes may not reach metadata or private ranges"
-for net in 169.254.0.0/16 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10; do
-  iptables -C DOCKER-USER -d "$net" -m conntrack --ctstate NEW -j DROP 2>/dev/null \
-    || iptables -I DOCKER-USER -d "$net" -m conntrack --ctstate NEW -j DROP
-done
-# Allow replies for established connections and the default bridge's own gateway DNS.
-iptables -C DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN 2>/dev/null \
-  || iptables -I DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
-netfilter-persistent save || true
+# Applied now and again on every boot / Docker restart by a small systemd unit.
+# Root runs it, so install a root-owned copy outside the app checkout.
+install -m 0755 -o root -g root "$APP_DIR/deploy/egress_guard.sh" /usr/local/sbin/rwr-egress-guard
+install -m 0644 -o root -g root "$APP_DIR/deploy/rwr-egress-guard.service" /etc/systemd/system/rwr-egress-guard.service
+systemctl daemon-reload
+systemctl enable rwr-egress-guard
+systemctl restart rwr-egress-guard
 
 echo "==> app user and venv"
 id rwr >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin rwr
