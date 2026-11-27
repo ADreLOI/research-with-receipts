@@ -89,6 +89,15 @@ class Settings:
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL"))
     llm_temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
     llm_max_tokens: int = field(default_factory=lambda: _env_int("LLM_MAX_TOKENS", 1800))
+    # auto: vultr when VULTR_INFERENCE_API_KEY is set, else mock. vultr | mock force one.
+    llm_provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "auto").lower())
+    # Second model tried when the primary is missing or keeps failing.
+    llm_fallback_model: str = field(default_factory=lambda: _env("LLM_FALLBACK_MODEL"))
+    llm_max_retries: int = field(default_factory=lambda: _env_int("LLM_MAX_RETRIES", 2))
+    llm_timeout_s: float = field(default_factory=lambda: _env_float("LLM_TIMEOUT_S", 90.0))
+    # What a live run does when Vultr is unreachable at start and no recording
+    # matches: "mock" runs the labelled mock policy, "none" fails the run.
+    llm_fallback: str = field(default_factory=lambda: _env("LLM_FALLBACK", "mock").lower())
 
     # --- Sandbox ---
     # "docker" (real isolation) or "mock" (offline dev only, NOT isolated).
@@ -137,7 +146,10 @@ class Settings:
 
     @property
     def llm_enabled(self) -> bool:
-        return bool(self.inference_api_key) and not _env_bool("FORCE_MOCK_LLM", False)
+        """True when live runs should use Vultr Serverless Inference."""
+        if _env_bool("FORCE_MOCK_LLM", False) or self.llm_provider == "mock":
+            return False
+        return bool(self.inference_api_key)
 
 
 settings = Settings()

@@ -16,6 +16,7 @@ from .agent import execute_run
 from .cassettes import library
 from .config import ROOT, settings
 from .containment import run_battery
+from .providers import live_status
 from .runs import registry
 from .sandbox import resolve_backend
 from .sandbox.docker_sandbox import reap_orphans
@@ -36,7 +37,8 @@ async def lifespan(_: FastAPI):
         if n:
             log.info("removed %d orphaned sandbox containers", n)
     registry.load_saved()
-    log.info("sandbox backend=%s llm=%s", backend, "vultr" if settings.llm_enabled else "mock")
+    status = await live_status()
+    log.info("sandbox backend=%s llm=%s (%s)", backend, status["provider"], status["detail"])
     yield
 
 
@@ -50,7 +52,8 @@ class RunRequest(BaseModel):
 
 
 async def _live_available() -> bool:
-    return settings.llm_enabled
+    status = await live_status()
+    return status["live"] and status["ok"]
 
 
 def _check_code(code: str | None) -> None:
@@ -65,6 +68,8 @@ async def health() -> dict:
             "sandbox_runtime": settings.sandbox_runtime or ("runc" if backend == "docker" else "local"),
             "remote_sandbox_host": bool(settings.sandbox_docker_host),
             "llm": "vultr-serverless-inference" if settings.llm_enabled else "mock",
+            "llm_status": await live_status(),
+            "llm_fallback": settings.llm_fallback,
             "llm_model": settings.llm_model or ("auto" if settings.llm_enabled else ""),
             "vision_model": settings.vision_model or ("auto" if settings.llm_enabled else ""),
             "inference_base_url": settings.inference_base_url,

@@ -13,7 +13,7 @@ Built for Vultr Meetup #42 (12h hackathon), Pattern B (sandboxed browser use) wi
 | Requirement | How this project meets it |
 |---|---|
 | VM-based backend on Vultr | FastAPI control plane on a Vultr Cloud Compute VM (`deploy/setup_vultr_vm.sh`) |
-| LLM calls via Vultr Serverless Inference | `app/llm.py`, OpenAI-compatible `https://api.vultrinference.com/v1`; optional vision model checks screenshots |
+| LLM calls via Vultr Serverless Inference | `app/providers/vultr.py`, OpenAI-compatible `https://api.vultrinference.com/v1`; optional vision model checks screenshots |
 | Sandboxes never inside the app process | Browser and Python run in Docker containers started per run; optionally on a separate VM via `SANDBOX_DOCKER_HOST=ssh://...` |
 | Multi-step agentic workflow | Plan → search → open pages → screenshot → compute → draft → capture evidence → verify |
 | Real executed results | Real Chromium screenshots, real page text, real Python stdout; nothing is "described" |
@@ -94,7 +94,7 @@ sandbox_image/
 web/                 index.html, app.js, styles.css (no build step)
 demo/hostile.html    deliberately hostile page for the containment moment
 demo/cassettes/      recorded runs that can be replayed offline
-scripts/             dev server, image build, demo runner, containment test, model list
+scripts/             dev server, image build, demo runner, recorder, containment test, inference check
 deploy/              Vultr VM setup script, systemd unit, Caddyfile
 tests/               pytest suite (runs offline in mock mode)
 docs/                pitch outline and demo script
@@ -116,12 +116,23 @@ To use the real sandbox locally:
 SANDBOX_BACKEND=docker ./scripts/dev.sh
 ```
 
-To use real reasoning, put your key in `.env`:
+To use real reasoning, put your key in `.env` and check the setup:
 
 ```bash
-VULTR_INFERENCE_API_KEY=...      # from the Vultr portal: Serverless > Inference
-python scripts/list_models.py    # see available models and what gets auto-picked
+VULTR_INFERENCE_API_KEY=...        # from the Vultr portal: Serverless > Inference
+python scripts/check_inference.py  # lists models, shows the auto-pick, makes one test call
 ```
+
+### LLM provider and fallbacks
+
+The agent talks to an `LLMProvider` (`app/providers/`): `VultrProvider` for real runs, `MockProvider` (deterministic, offline), `ReplayProvider` (recorded runs) and a `RecordingProvider` wrapper. The Vultr provider:
+
+* auto-picks a text and a vision model from `GET /v1/models` unless `LLM_MODEL` / `VISION_MODEL` are set;
+* retries 429 / 5xx / timeouts with exponential backoff (`LLM_MAX_RETRIES`, honours `Retry-After`), and reports a bad key (401) immediately with a clear message;
+* switches to `LLM_FALLBACK_MODEL` if the primary model is missing or keeps failing, and sticks with it for the rest of the run;
+* treats the vision check as a bonus: if it fails, the claim keeps its text-based verdict.
+
+If Vultr is unreachable when a run starts, the app replays a matching recording (`DEMO_MODE=auto`), otherwise continues with the clearly labelled mock policy (`LLM_FALLBACK=mock`) or fails with a readable error (`LLM_FALLBACK=none`). `/api/health` reports which provider is active and whether it is reachable.
 
 Run the tests:
 

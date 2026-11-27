@@ -19,7 +19,8 @@ from .cassettes import Cassette, Recorder
 from .config import settings
 from .llm import LLMError, extract_json
 from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
-from .providers import LLMProvider, RecordingProvider, ReplayProvider, make_live_provider
+from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
+                        make_live_provider)
 from .receipts import Receipt, match_quote, verify_claim
 from .runs import Run
 from .sandbox import Sandbox, ToolResult, make_sandbox
@@ -91,17 +92,32 @@ class Agent:
         self.cassette = cassette
         self.replay = cassette is not None
         self.recorder: Recorder | None = None
-        if self.replay:
+        if cassette is not None:
             self.provider: LLMProvider = ReplayProvider(cassette)
         else:
             self.provider = make_live_provider()
             if settings.record_runs:
                 self.recorder = Recorder(run.question)
-                self.provider = RecordingProvider(self.provider, self.recorder)
         self.policy = Policy(run.question, self.provider)
         self.sandbox: Sandbox | None = None
         self.sandbox_label = ""
         self.retries = 0
+
+    async def _prepare_provider(self) -> None:
+        """Check the live model is reachable; degrade gracefully if it is not."""
+        if self.replay:
+            return
+        if isinstance(self.provider, VultrProvider):
+            ok, detail = await self.provider.ping()
+            if not ok:
+                if settings.llm_fallback != "mock":
+                    raise LLMError(f"Vultr Serverless Inference unreachable: {detail}")
+                self.provider = MockProvider(note=f"fallback, Vultr unreachable: {detail[:80]}")
+                self.run.emit("fallback", message=f"Vultr Serverless Inference unreachable ({detail[:160]}). "
+                                                  "Continuing with the labelled mock policy (LLM_FALLBACK=mock).")
+        if self.recorder:
+            self.provider = RecordingProvider(self.provider, self.recorder)
+        self.policy.provider = self.provider
 
     async def _make_sandbox(self) -> Sandbox:
         if self.cassette is not None:
@@ -260,6 +276,7 @@ class Agent:
 
     async def run_loop(self) -> None:
         run = self.run
+        await self._prepare_provider()
         info_llm = await self.provider.describe()
         run.llm = info_llm.label
         run.mode = "replay" if self.replay else "live"
