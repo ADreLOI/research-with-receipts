@@ -63,7 +63,25 @@ export GIT_SSH_COMMAND="ssh -i ~/.ssh/rwr_deploy"
 git pull --rebase origin claude/research-with-receipts && git push origin HEAD:claude/research-with-receipts
 ```
 
-## 5. Optional: sandboxes on a separate Vultr VM
+## 5. Demo video without screen recording (~6 min, optional)
+
+`scripts/record_video.py` drives the public URL with a headless browser and records a captioned walkthrough
+that follows `docs/DEMO_SCRIPT.md` (live run, hover claims, receipt + Verify SHA-256, hostile page,
+containment test). It runs inside the sandbox image, which already has Playwright and Chromium:
+
+```bash
+cd /opt/rwr && mkdir -p video && chmod 777 video
+set -a && . ./.env && set +a          # exports APP_ACCESS_CODE if you set one
+docker run --rm -v "$PWD:/w:ro" -v "$PWD/video:/out" -e APP_ACCESS_CODE \
+    rwr-sandbox:latest python /w/scripts/record_video.py "$PUBLIC_BASE_URL" --out /out
+ls video/    # demo.webm (1440x900), demo.srt (captions), shot-*.png (real screenshots for the README)
+scp root@<VM_IP>:/opt/rwr/video/* .   # from your laptop
+```
+
+Live model runs take a minute or two each, so trim the waiting in any editor, or add `--replay` to use the
+recorded runs (the UI labels them as replays). Upload `demo.webm` to YouTube (unlisted) or Drive.
+
+## 6. Optional: sandboxes on a separate Vultr VM
 
 ```bash
 echo "VULTR_API_KEY=..." | sudo tee -a /opt/rwr/.env

@@ -227,6 +227,7 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 * 2-minute demo script with timings, voice-over and fallback lines: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 * Submission text, ready to paste: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
 * Copy-paste deployment checklist: [`docs/DEPLOY_CHECKLIST.md`](docs/DEPLOY_CHECKLIST.md)
+* Captioned demo video without screen recording: [`scripts/record_video.py`](scripts/record_video.py) drives the public URL with headless Chromium and writes `demo.webm`, `demo.srt` and screenshots
 
 ## Team
 
