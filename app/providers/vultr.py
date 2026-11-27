@@ -29,6 +29,10 @@ log = logging.getLogger(__name__)
 # live list comes from GET /models, so unknown ids are simply skipped.
 _TEXT_PREFS = ["llama-3.3-70b", "qwen3", "qwen2.5-72b", "deepseek-v3", "gpt-oss", "kimi", "mistral", "llama"]
 _VISION_PREFS = ["vl", "vision", "pixtral", "llava", "gemma-3"]
+# Ids that are clearly not chat models (embeddings, safety classifiers,
+# speech, image generation). Never auto-pick them for the agent.
+_NON_CHAT = ("embed", "rerank", "guard", "whisper", "tts", "speech", "audio", "flux", "stable-diffusion", "sdxl",
+             "image-gen", "moderation", "bge", "e5-")
 _RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 _PING_TTL_S = 60.0
 
@@ -109,15 +113,15 @@ class VultrProvider(LLMProvider):
         except LLMError as exc:
             log.warning("%s", exc)
             models = []
-        lower = {m.lower(): m for m in models}
+        lower = {m.lower(): m for m in models if not any(bad in m.lower() for bad in _NON_CHAT)}
         if not self.model:
             for pref in _TEXT_PREFS:
                 hit = next((orig for low, orig in lower.items() if pref in low and "vl" not in low), None)
                 if hit:
                     self.model = hit
                     break
-            if not self.model and models:
-                self.model = models[0]
+            if not self.model and lower:
+                self.model = next(iter(lower.values()))
         if not self.vision_model and not self._vision_disabled:
             for pref in _VISION_PREFS:
                 hit = next((orig for low, orig in lower.items() if pref in low), None)
@@ -159,10 +163,22 @@ class VultrProvider(LLMProvider):
             raise LLMError(f"inference error {r.status_code}: {r.text[:400]}")
         data = r.json()
         try:
-            content = data["choices"][0]["message"].get("content") or ""
-        except (KeyError, IndexError) as exc:
+            choice = data["choices"][0]
+            message = choice["message"]
+        except (KeyError, IndexError, TypeError) as exc:
             raise LLMError(f"unexpected inference response: {str(data)[:400]}") from exc
-        return strip_reasoning(content)
+        content = strip_reasoning(message.get("content") or "")
+        if not content.strip():
+            # Reasoning models sometimes put everything in a separate field,
+            # or spend the whole token budget thinking.
+            reasoning = message.get("reasoning_content") or message.get("reasoning") or ""
+            if isinstance(reasoning, str) and "{" in reasoning:
+                return reasoning[reasoning.rfind("{\"thought\""):] if '{"thought"' in reasoning else reasoning
+            if choice.get("finish_reason") == "length":
+                raise LLMError(f"model {model!r} hit max_tokens before answering; raise LLM_MAX_TOKENS or pick a "
+                               "non-reasoning model with LLM_MODEL")
+            raise LLMError(f"model {model!r} returned an empty reply")
+        return content
 
     async def chat(self, messages: list[dict[str, Any]], *, max_tokens: int | None = None,
                    temperature: float | None = None) -> str:

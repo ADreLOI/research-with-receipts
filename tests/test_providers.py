@@ -97,6 +97,27 @@ def test_auto_picks_models_from_list():
     assert asyncio.run(p.resolve_models()) == ("llama-3.3-70b-instruct", "Qwen2.5-VL-7B")
 
 
+def test_auto_pick_skips_embedding_and_guard_models():
+    def handler(req):
+        return httpx.Response(200, json={"data": [{"id": "llama-guard-3-8b"}, {"id": "qwen3-embedding-8b"},
+                                                  {"id": "bge-m3"}, {"id": "mistral-small-3.1-24b-instruct"}]})
+
+    p = _provider(handler)
+    p.model = ""
+    assert asyncio.run(p.resolve_models())[0] == "mistral-small-3.1-24b-instruct"
+
+
+def test_reasoning_only_reply_is_used_and_truncation_is_explained():
+    replies = iter([
+        {"choices": [{"message": {"content": "", "reasoning_content": 'hmm... {"thought": "t", "action": "final"}'}}]},
+        {"choices": [{"message": {"content": ""}, "finish_reason": "length"}]},
+    ])
+    p = _provider(lambda req: httpx.Response(200, json=next(replies)))
+    assert asyncio.run(p.chat([{"role": "user", "content": "x"}])) == '{"thought": "t", "action": "final"}'
+    with pytest.raises(LLMError, match="LLM_MAX_TOKENS"):
+        asyncio.run(p.chat([{"role": "user", "content": "x"}]))
+
+
 def test_unreachable_vultr_falls_back_to_labelled_mock(monkeypatch):
     monkeypatch.setattr(agent_mod, "make_live_provider",
                         lambda: _provider(lambda req: httpx.Response(503, text="down")))
