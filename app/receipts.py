@@ -147,6 +147,32 @@ def best_sentence(target: str, text: str) -> tuple[str, float]:
     return best, round(best_ratio, 3)
 
 
+_WORD = re.compile(r"[a-z0-9]+(?:[.,][0-9]+)*")
+_STOPWORDS = set("a an and are as at be by for from has have in is it its of on or that the their this to was were "
+                 "which with".split())
+
+
+def _words(text: str) -> set[str]:
+    return {w for w in _WORD.findall(normalize(text)) if w not in _STOPWORDS}
+
+
+def candidate_sentences(target: str, text: str, k: int = 4) -> list[tuple[float, str]]:
+    """Sentences of `text` that share the most content words (numbers included) with `target`."""
+    want = _words(target)
+    if not want:
+        return []
+    scored = []
+    for sent in _SENT_SPLIT.split(text or ""):
+        sent = sent.strip()
+        if not 20 <= len(sent) <= 400:
+            continue
+        overlap = len(want & _words(sent)) / len(want)
+        if overlap > 0:
+            scored.append((round(overlap, 3), sent))
+    scored.sort(key=lambda x: -x[0])
+    return scored[:k]
+
+
 def snap_quote(claim: dict[str, Any], store: "ReceiptStore") -> bool:
     """Replace a paraphrased or missing quote with the closest real sentence from a cited page.
 

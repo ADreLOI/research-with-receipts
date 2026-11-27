@@ -64,7 +64,7 @@ def test_wikipedia_keyword_retry_when_everything_else_is_empty(run_search):
         return FakeResponse(data={"query": {"search": hits}})
 
     out = run_search(lambda url, **kw: FakeResponse("<html></html>"), get)
-    assert out["provider"].startswith("wikipedia (keywords)")
+    assert out["provider"].startswith("wikipedia (6 keywords)")
     assert seen[1] == "share world population three biggest countries"
     assert out["results"][0]["url"] == "https://en.wikipedia.org/wiki/World_population"
 
@@ -86,3 +86,17 @@ def test_duckduckgo_bot_challenge_is_skipped_quickly(run_search):
 
     out = run_search(post, get, query="Amsterdam population")
     assert out["provider"] == ("wikipedia (after duckduckgo: RuntimeError, duckduckgo-lite: RuntimeError)")
+
+
+def test_instant_answer_api_is_the_last_resort(run_search):
+    def get(url, params=None, headers=None, **kw):
+        if "duckduckgo" in url:
+            return FakeResponse(data={"Heading": "GVisor", "AbstractURL": "https://en.wikipedia.org/wiki/GVisor",
+                                      "AbstractText": "gVisor is an application kernel.", "RelatedTopics": [
+                                          {"FirstURL": "https://gvisor.dev", "Text": "gVisor homepage"}]})
+        return FakeResponse(data={"query": {"search": []}})
+
+    out = run_search(lambda url, **kw: FakeResponse(status_code=202), get,
+                     query="gVisor architecture performance overhead runc comparison")
+    assert out["provider"].startswith("duckduckgo-instant")
+    assert [r["url"] for r in out["results"]] == ["https://en.wikipedia.org/wiki/GVisor", "https://gvisor.dev"]

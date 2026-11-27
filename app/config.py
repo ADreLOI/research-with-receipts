@@ -88,7 +88,7 @@ class Settings:
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL"))
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL"))
     llm_temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
-    llm_max_tokens: int = field(default_factory=lambda: _env_int("LLM_MAX_TOKENS", 1800))
+    llm_max_tokens: int = field(default_factory=lambda: _env_int("LLM_MAX_TOKENS", 4000))
     # auto: vultr when VULTR_INFERENCE_API_KEY is set, else mock. vultr | mock force one.
     llm_provider: str = field(default_factory=lambda: _env("LLM_PROVIDER", "auto").lower())
     # Second model tried when the primary is missing or keeps failing.

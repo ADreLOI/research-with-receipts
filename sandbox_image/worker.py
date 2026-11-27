@@ -158,20 +158,45 @@ def _wikipedia(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
     return out
 
 
+def _ddg_instant(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
+    """DuckDuckGo's Instant Answer JSON API: keyless and usually not challenged on datacenter IPs."""
+    r = httpx.get("https://api.duckduckgo.com/", params={"q": query, "format": "json", "no_html": 1,
+                                                         "skip_disambig": 1}, headers={"User-Agent": WIKI_UA},
+                  timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    out: list[dict] = []
+    if data.get("AbstractURL"):
+        out.append({"title": data.get("Heading") or data["AbstractURL"], "url": data["AbstractURL"],
+                    "snippet": data.get("AbstractText", "")[:300]})
+    topics = list(data.get("Results", [])) + list(data.get("RelatedTopics", []))
+    for t in topics:
+        for item in t.get("Topics", [t]):  # grouped topics nest one level
+            url = item.get("FirstURL", "")
+            if url.startswith("http") and "duckduckgo.com/c/" not in url:
+                out.append({"title": item.get("Text", url)[:120], "url": url, "snippet": item.get("Text", "")[:300]})
+    return out[:n]
+
+
 def search(req: dict) -> dict:
-    """Keyless search from inside the sandbox. Datacenter IPs often get an
-    empty page from DuckDuckGo, so try its two endpoints, then Wikipedia
-    (with a keyword-only retry, since long questions match nothing there)."""
+    """Keyless search from inside the sandbox. Datacenter IPs usually get a
+    bot challenge from DuckDuckGo's HTML pages, so this falls back to its
+    Instant Answer API and to Wikipedia, relaxing long queries to fewer
+    keywords until something matches (Wikipedia requires every word)."""
     import httpx
     from bs4 import BeautifulSoup
 
     query = str(req.get("query", ""))[:300]
     n = int(req.get("max_results", 6))
-    attempts = [("duckduckgo", _ddg_html, query), ("duckduckgo-lite", _ddg_lite, query),
-                ("wikipedia", _wikipedia, query)]
-    short = keywords(query)
-    if short and short.lower() != query.lower():
-        attempts.append(("wikipedia (keywords)", _wikipedia, short))
+    attempts = [("duckduckgo", _ddg_html, query), ("duckduckgo-lite", _ddg_lite, query)]
+    relaxed: list[str] = []
+    for k in (6, 4, 3, 2):
+        q = keywords(query, k)
+        if q and q.lower() != query.lower() and q not in relaxed:
+            relaxed.append(q)
+    attempts.append(("wikipedia", _wikipedia, query))
+    attempts += [(f"wikipedia ({len(q.split())} keywords)", _wikipedia, q) for q in relaxed]
+    attempts.append(("duckduckgo-instant", _ddg_instant, relaxed[-1] if relaxed else query))
     tried: list[str] = []
     for name, fn, q in attempts:
         try:
@@ -181,7 +206,7 @@ def search(req: dict) -> dict:
             continue
         if results:
             provider = name if not tried else f"{name} (after {', '.join(tried)})"
-            return {"provider": provider, "query": query, "results": results}
+            return {"provider": provider, "query": query, "results": results[:n]}
         tried.append(f"{name}: no results")
     return {"provider": "none (" + ", ".join(tried) + ")", "query": query, "results": []}
 

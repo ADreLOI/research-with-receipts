@@ -19,10 +19,10 @@ from .cassettes import Cassette, Recorder
 from .config import settings
 from .llm import ContextTooLong, LLMError, extract_json
 from .normalize import normalize_action, normalize_claims
-from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
+from .prompts import FORCE_FINAL, QUOTE_REPAIR, REPAIR, SYSTEM_PROMPT
 from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
                         make_live_provider)
-from .receipts import Receipt, match_quote, snap_quote, verify_claim
+from .receipts import Receipt, candidate_sentences, match_quote, snap_quote, verify_claim
 from .runs import Run
 from .sandbox import Sandbox, ToolResult, make_sandbox
 from .sandbox.replay_sandbox import RecordingSandbox, ReplaySandbox
@@ -236,6 +236,58 @@ class Agent:
             self.run.emit("containment", step=step, tool=tool, message=f"Sandbox contained the action: "
                                                                        f"{res.contained}. Host unaffected.")
 
+    # -- quote repair
+
+    async def repair_quotes(self, claims: list[dict[str, Any]]) -> None:
+        """One extra model turn for quotes that are not on the cited page.
+
+        The model may only choose among real sentences taken from the cited
+        receipts, so whatever it picks is verbatim by construction. Best
+        effort: any failure (including a replay recorded without this turn)
+        leaves the claims as they were, and snapping/verification still apply.
+        """
+        items, options = [], {}
+        for idx, claim in enumerate(claims):
+            quote = str(claim.get("quote", "")).strip()
+            pages = [r for r in (self.run.receipts.get(str(x)) for x in claim.get("receipt_ids", []))
+                     if r is not None and r.kind == "page"]
+            if not pages or (quote and max(match_quote(quote, r.text)[0] for r in pages) >= 0.9):
+                continue
+            cands: list[tuple[float, str, str]] = []
+            for r in pages:
+                cands += [(score, sent, r.id) for score, sent in
+                          candidate_sentences(f"{claim.get('text', '')} {quote}", r.text, k=4)]
+            cands = sorted(cands, key=lambda c: -c[0])[:4]
+            if not cands:
+                continue
+            letters = "ABCD"
+            options[idx + 1] = {letters[i]: c for i, c in enumerate(cands)}
+            lines = "\n".join(f"  {letters[i]}) [{c[2]}] {c[1]}" for i, c in enumerate(cands))
+            items.append(f"Claim {idx + 1}: {claim.get('text', '')}\n{lines}")
+        if not items:
+            return
+        prompt = QUOTE_REPAIR.format(items="\n\n".join(items))
+        try:
+            raw = await self.provider.chat([{"role": "user", "content": prompt}], max_tokens=600, temperature=0)
+            picks = extract_json(raw).get("picks", [])
+        except Exception as exc:  # noqa: BLE001 - optional step
+            log.info("quote repair skipped: %s", exc)
+            return
+        for p in picks if isinstance(picks, list) else []:
+            try:
+                n, letter = int(p.get("claim")), str(p.get("pick", "")).strip().upper()[:1]
+            except (TypeError, ValueError, AttributeError):
+                continue
+            choice = options.get(n, {}).get(letter)
+            if not choice:
+                continue
+            claim = claims[n - 1]
+            claim["quote_original"] = claim.get("quote", "")
+            claim["quote"] = choice[1]
+            claim["quote_repaired"] = True
+            self.run.emit("requote", claim=n - 1, receipt_id=choice[2],
+                          message=f"Claim {n}: quote replaced with a verbatim sentence from {choice[2]}.")
+
     # -- evidence pass
 
     async def capture_evidence(self, claims: list[dict[str, Any]]) -> None:
@@ -334,6 +386,7 @@ class Agent:
                 raise LLMError("agent ended without a final answer")
             claims = normalize_claims(final)
             run.emit("drafted", n_claims=len(claims))
+            await self.repair_quotes(claims)
             await self.capture_evidence(claims)
             await self.verify(claims)
             counts = {s: sum(1 for c in claims if c["verification"]["status"] == s)

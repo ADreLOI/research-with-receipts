@@ -207,3 +207,28 @@ def test_context_overflow_trims_old_observations_and_continues(monkeypatch):
     assert TightContext.overflows == 1
     first_obs = next(m for m in provider.seen[-1] if str(m["content"]).startswith("Observation for"))
     assert "trimmed to fit" in first_obs["content"]
+
+
+def test_paraphrased_quote_is_repaired_with_a_verbatim_sentence(monkeypatch):
+    run, provider, _ = run_with(monkeypatch, [
+        act("screenshot", url=GVISOR),
+        final(claim("gVisor ships the runsc runtime.", ["R1"], "gvisor has some runtime called runsc i think")),
+        {"picks": [{"claim": 1, "pick": "A"}]},
+    ])
+    assert run.status == "done", run.error
+    c = run.answer["claims"][0]
+    assert c.get("quote_repaired") and c["quote_original"].startswith("gvisor has some")
+    page = run.receipts.get("R1").text
+    assert c["quote"] in page  # verbatim by construction
+    assert any(e["type"] == "requote" for e in run.events)
+    assert "candidate sentence" in provider.seen[-1][0]["content"]
+
+
+def test_quote_repair_failure_leaves_the_claim_alone(monkeypatch):
+    # No reply left for the repair turn (like a replay recorded before this step existed).
+    run, _, _ = run_with(monkeypatch, [
+        act("screenshot", url=GVISOR),
+        final(claim("gVisor ships the runsc runtime.", ["R1"], "gvisor has some runtime called runsc i think")),
+    ])
+    assert run.status == "done", run.error
+    assert not run.answer["claims"][0].get("quote_repaired")
