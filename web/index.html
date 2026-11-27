@@ -4,100 +4,150 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Research with Receipts</title>
-<meta name="description" content="A research agent whose every claim links to evidence captured inside a disposable Vultr sandbox.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f5b400'/><path d='M9 7h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z' fill='%23161a22'/></svg>">
+<meta name="description" content="Research where every claim comes with a verifiable receipt: sources captured and hashed inside disposable Vultr sandboxes.">
+<meta name="color-scheme" content="light dark">
+<script>
+  // Apply the saved theme before first paint (no flash of the wrong theme).
+  try { const t = localStorage.getItem("rwr-theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23FFD43B'/><path d='M10 7h12v17l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5z' fill='%231C1B18'/><path d='M13 15.5l2 2 4-4.5' stroke='%23FFD43B' stroke-width='1.8' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
-<body>
-<div class="offline" id="offline" hidden>Can't reach the backend. Retrying…</div>
-<header class="top">
-  <a class="brand" href="/" aria-label="Research with Receipts home">
-    <span class="logo" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 7h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" fill="#161a22"/><path d="M12 12h8M12 16h8M12 20h5" stroke="var(--accent)" stroke-width="1.6"/></svg>
-    </span>
-    <span>
-      <span class="title">Research with Receipts</span>
-      <span class="tag">Every claim links to evidence captured inside a Vultr sandbox.</span>
-    </span>
+<body class="is-home">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+    <symbol id="i-page" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2.5"/><path d="M9 6l1.2-2h3.6L15 6"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></symbol>
+    <symbol id="i-flag" viewBox="0 0 24 24"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8.2 7 10 4-1.8 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4M12 17h.01"/></symbol>
+    <symbol id="i-retry" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M12 3 4 7v10l8 4 8-4V7z"/><path d="m4 7 8 4 8-4M12 11v10"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+    <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></symbol>
+    <symbol id="i-out" viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6 6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+    <symbol id="i-dot" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></symbol>
+  </defs>
+</svg>
+
+<div class="offline" id="offline" role="status" hidden>Can't reach the server. Retrying…</div>
+
+<header class="bar">
+  <a class="brand" href="#" aria-label="Research with Receipts, home">
+    <svg class="mark" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" class="mark-bg"/><path d="M10 7h12v17l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5z" class="mark-paper"/><path d="M13 15.5l2 2 4-4.5" class="mark-tick"/></svg>
+    <span class="brand-name">Research with Receipts</span>
   </a>
-  <div class="status" id="status">
-    <span class="pill" id="pill-sandbox" title="Where browsing and code run">sandbox: …</span>
-    <span class="pill" id="pill-llm" title="Which model plans the research">llm: …</span>
-    <button class="btn ghost" id="btn-contain" type="button">Run containment test</button>
+  <div class="bar-status" id="status">
+    <span class="chip" id="pill-sandbox" title="Where browsing and code run"><i class="led"></i><span>Sandbox</span></span>
+    <span class="chip" id="pill-llm" title="Which model plans the research"><i class="led"></i><span>Model</span></span>
+  </div>
+  <div class="bar-actions">
+    <button class="btn quiet" id="btn-history" type="button" aria-label="History"><svg class="ic"><use href="#i-clock"/></svg><span class="hide-sm">History</span></button>
+    <button class="btn quiet" id="btn-contain" type="button"><svg class="ic"><use href="#i-shield"/></svg><span class="hide-sm">Run containment test</span></button>
+    <button class="btn icon quiet" id="btn-theme" type="button" aria-label="Switch theme"><svg class="ic"><use href="#i-moon"/></svg></button>
   </div>
 </header>
 
-<main class="grid">
-  <section class="col-left">
-    <form id="ask" class="card">
-      <label for="q" class="label">Research question</label>
-      <textarea id="q" rows="3" maxlength="600" placeholder="Ask something worth checking…" required></textarea>
-      <div class="row" id="code-row" hidden>
-        <input id="access" type="password" placeholder="Access code" autocomplete="off" aria-label="Access code">
+<main>
+  <section class="hero" id="hero">
+    <p class="eyebrow reveal">Agentic research, contained on Vultr</p>
+    <h1 class="reveal">Research where every claim comes with a <span class="hl">verifiable receipt</span>.</h1>
+    <p class="lede reveal">Ask a question. An agent searches, reads pages in a real browser and runs the numbers in Python, all inside throwaway sandboxes. You get a brief where each claim links to the exact sentence it came from, highlighted, timestamped and hashed.</p>
+
+    <form id="ask" class="ask reveal" autocomplete="off">
+      <label for="q" class="sr-only">Research question</label>
+      <textarea id="q" rows="1" maxlength="600" placeholder="Ask something worth checking…" required></textarea>
+      <div class="ask-foot">
+        <input id="access" class="access" type="password" placeholder="Access code" autocomplete="off" aria-label="Access code" hidden>
+        <label class="toggle" id="replay-row" hidden>
+          <input type="checkbox" id="replay"><span class="switch" aria-hidden="true"></span>
+          <span>Replay the recorded run</span>
+        </label>
+        <span class="kbd-hint hide-sm"><kbd>⌘</kbd><kbd>↵</kbd></span>
+        <button class="btn primary" type="submit" id="go"><span>Research</span><svg class="ic"><use href="#i-arrow"/></svg></button>
       </div>
-      <button class="btn primary" type="submit" id="go">Research it</button>
-      <label class="toggle" id="replay-row" hidden>
-        <input type="checkbox" id="replay">
-        <span>Replay the recorded run <span class="muted">(offline-safe, clearly labelled)</span></span>
-      </label>
-      <p class="hint muted">Ctrl/Cmd + Enter to submit</p>
-      <div class="examples" id="examples"></div>
     </form>
 
-    <div class="card sandbox-card" id="sandbox-card">
-      <h2>Sandbox</h2>
-      <div id="sandbox-info" class="muted small">No run yet. Each run gets a fresh container that is destroyed at the end.</div>
-    </div>
+    <div class="examples reveal" id="examples" aria-label="Example questions"></div>
 
-    <div class="card">
-      <h2>History</h2>
-      <ul id="history" class="history"><li class="muted small">No runs yet.</li></ul>
-    </div>
+    <ol class="how reveal" aria-label="How it works">
+      <li><span class="how-n">01</span><b>Plan</b><span>A model on Vultr Serverless Inference picks one action at a time.</span></li>
+      <li><span class="how-n">02</span><b>Execute</b><span>Search, browsing and Python run in disposable containers with no secrets.</span></li>
+      <li><span class="how-n">03</span><b>Receipt</b><span>Every source is captured: URL, exact quote, highlighted screenshot, SHA-256.</span></li>
+      <li><span class="how-n">04</span><b>Verify</b><span>Each claim is checked against its receipts and labelled for you.</span></li>
+    </ol>
   </section>
 
-  <section class="col-main">
-    <div class="card answer" id="answer"></div>
-    <div class="card" id="receipts-card" hidden>
-      <div class="receipts-head">
-        <h2>Receipts <span class="muted" id="receipts-count"></span></h2>
-        <div class="tabs" role="tablist" id="receipt-tabs"></div>
-      </div>
-      <p class="muted small receipts-help">Hover a claim to see its receipts, or a receipt to see the claims it supports. Click to inspect and verify its SHA-256.</p>
-      <div class="receipts" id="receipts"></div>
+  <section class="run" id="run" hidden>
+    <div class="run-main">
+      <div id="answer" class="answer" aria-live="polite"></div>
+      <section class="receipts-sec" id="receipts-card" hidden>
+        <div class="sec-head">
+          <h2>Receipts <span class="count" id="receipts-count"></span></h2>
+          <div class="seg" role="tablist" id="receipt-tabs"></div>
+        </div>
+        <p class="sec-help">Hover a claim to light up its receipts. Open a receipt to inspect it and recompute its hash.</p>
+        <div class="receipts" id="receipts"></div>
+      </section>
     </div>
-  </section>
 
-  <section class="col-log">
-    <div class="card log-card">
-      <h2>Live action log <span class="live" id="live" hidden>live</span></h2>
-      <ol class="log" id="log"><li class="muted small">Plans, tool calls, retries and sandbox events appear here as they happen.</li></ol>
-    </div>
+    <aside class="run-side">
+      <section class="panel sandbox-panel" id="sandbox-card">
+        <div class="panel-head"><svg class="ic"><use href="#i-box"/></svg><h2>Sandbox</h2><span class="life" id="sandbox-life"></span></div>
+        <div id="sandbox-info" class="sandbox-info">Each run gets a fresh container that is destroyed at the end.</div>
+      </section>
+      <section class="panel timeline-panel">
+        <div class="panel-head"><svg class="ic"><use href="#i-dot"/></svg><h2>Agent timeline</h2><span class="live" id="live" hidden>Live</span></div>
+        <ol class="timeline" id="log"></ol>
+      </section>
+    </aside>
   </section>
 </main>
 
-<dialog id="modal" class="modal" aria-labelledby="modal-title">
-  <div class="modal-head">
+<dialog id="modal" class="sheet receipt-sheet" aria-labelledby="modal-title">
+  <div class="sheet-head">
     <h3 id="modal-title">Receipt</h3>
-    <button class="btn ghost" type="button" data-close>Close</button>
+    <button class="btn icon quiet" type="button" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
   </div>
-  <div id="modal-body" class="modal-body"></div>
+  <div id="modal-body" class="sheet-body"></div>
 </dialog>
 
-<dialog id="contain" class="modal" aria-labelledby="contain-title">
-  <div class="modal-head">
+<dialog id="contain" class="sheet" aria-labelledby="contain-title">
+  <div class="sheet-head">
     <h3 id="contain-title">Containment test</h3>
-    <button class="btn ghost" type="button" data-close>Close</button>
+    <button class="btn icon quiet" type="button" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
   </div>
-  <div class="modal-body">
-    <p class="muted">Hostile actions are thrown at a fresh sandbox. Each one should be absorbed without touching the host.</p>
-    <div id="contain-sandbox" class="muted small"></div>
+  <div class="sheet-body">
+    <p class="sheet-lede">Eight hostile actions are thrown at a fresh sandbox. Each one should be absorbed without touching the host.</p>
+    <div id="contain-sandbox" class="contain-sandbox"></div>
     <ol id="contain-list" class="attacks"></ol>
     <div id="contain-done"></div>
   </div>
 </dialog>
 
+<dialog id="history-sheet" class="sheet side" aria-labelledby="history-title">
+  <div class="sheet-head">
+    <h3 id="history-title">Recent runs</h3>
+    <button class="btn icon quiet" type="button" data-close aria-label="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+  </div>
+  <ul id="history" class="history"></ul>
+</dialog>
+
 <footer class="foot">
-  Control plane on a Vultr VM · reasoning on Vultr Serverless Inference · browsing and code in disposable containers
+  <span>Control plane on a Vultr VM</span><span>Reasoning on Vultr Serverless Inference</span><span>Browsing and code in disposable containers</span>
 </footer>
 <script src="/static/app.js"></script>
 </body>
