@@ -10,6 +10,7 @@ non-secret knobs (RWR_*).
 from __future__ import annotations
 
 import base64
+import html
 import ipaddress
 import json
 import os
@@ -216,13 +217,15 @@ HIGHLIGHT_JS = r"""
   const fold = (c) => ({'‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-'}[c] || c);
   const squash = (s) => Array.from(s || '').filter((c) => !/\s/.test(c)).map((c) => fold(c).toLowerCase()).join('');
   const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
-    acceptNode: (n) => (n.parentElement && !skip.has(n.parentElement.tagName)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT,
-  });
+  // No NodeFilter callback: pages served with a CSP "sandbox" directive (raw
+  // text hosts, for example) disable scripting, and the browser then refuses
+  // to run DOM callbacks ("callback is no longer runnable"). Filter in the loop.
+  const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
   let flat = '';
   const map = [];
   while (walker.nextNode()) {
     const n = walker.currentNode, v = n.nodeValue;
+    if (!n.parentElement || skip.has(n.parentElement.tagName)) continue;
     for (let i = 0; i < v.length; i++) {
       if (/\s/.test(v[i])) continue;
       flat += fold(v[i]).toLowerCase();
@@ -271,6 +274,25 @@ HIGHLIGHT_JS = r"""
 """
 
 
+def _highlight(page, quote: str, stamp: str) -> dict:
+    """Run HIGHLIGHT_JS; never let a page quirk fail the whole screenshot."""
+    try:
+        return page.evaluate(HIGHLIGHT_JS, [quote, stamp]) or {}
+    except Exception as exc:  # noqa: BLE001
+        return {"found": False, "matched": "", "error": f"{type(exc).__name__}: {str(exc)[:200]}"}
+
+
+def _plain_text(resp, page) -> bool:
+    ctype = (resp.headers.get("content-type", "") if resp else "").lower()
+    if ctype.startswith("text/plain"):
+        return True
+    try:  # Chromium renders text/plain as <body><pre>…</pre></body>
+        return bool(page.evaluate("() => document.body && document.body.children.length === 1 && "
+                                  "document.body.firstElementChild.tagName === 'PRE'"))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def screenshot(req: dict) -> dict:
     from playwright.sync_api import sync_playwright
 
@@ -306,12 +328,24 @@ def screenshot(req: dict) -> dict:
             text = ""
         captured_at = now_iso()
         stamp = f"receipt · {captured_at} · {final_url[:120]}"
-        hl = page.evaluate(HIGHLIGHT_JS, [highlight, stamp])
+        hl = _highlight(page, highlight, stamp)
+        if highlight and not hl.get("found") and _plain_text(resp, page):
+            # Plain-text page that could not be highlighted in place: show the
+            # same captured text in a neutral <pre> view and highlight it there.
+            # The stamp says so, the URL and text in the receipt are unchanged.
+            try:
+                page.set_content('<pre style="white-space:pre-wrap;word-break:break-word;margin:16px;'
+                                 'font:13px/1.45 ui-monospace,monospace">' + html.escape(text) + "</pre>",
+                                 timeout=5000)
+                hl = _highlight(page, highlight, stamp + " · plain-text view")
+            except Exception as exc:  # noqa: BLE001 - keep the original rendering
+                hl["error"] = f"plain-text view failed: {type(exc).__name__}"
         png = page.screenshot(type="jpeg", quality=72, full_page=False)
         browser.close()
     return {"url": final_url, "status": resp.status if resp else 0, "title": title, "text": text,
             "captured_at": captured_at, "highlight_found": bool(hl.get("found")),
-            "highlight_matched": hl.get("matched", ""), "blocked_requests": blocked[:20],
+            "highlight_matched": hl.get("matched", ""), "highlight_error": hl.get("error", ""),
+            "blocked_requests": blocked[:20],
             "image_b64": base64.b64encode(png).decode(), "image_mime": "image/jpeg"}
 
 
