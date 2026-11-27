@@ -27,12 +27,16 @@ log = logging.getLogger(__name__)
 
 # Preference order used when LLM_MODEL / VISION_MODEL are not set. The
 # live list comes from GET /models, so unknown ids are simply skipped.
-_TEXT_PREFS = ["llama-3.3-70b", "qwen3", "qwen2.5-72b", "deepseek-v3", "gpt-oss", "kimi", "mistral", "llama"]
-_VISION_PREFS = ["vl", "vision", "pixtral", "llava", "gemma-3"]
+# Preference order used when LLM_MODEL / VISION_MODEL are not set. The
+# live list comes from GET /models, so unknown ids are simply skipped.
+# First entries match what worked on Vultr Serverless Inference in Nov 2026.
+_TEXT_PREFS = ["deepseek-v4", "qwen3.8", "deepseek-v3", "llama-3.3-70b", "qwen3", "qwen2.5-72b", "gpt-oss", "kimi",
+               "mistral", "llama"]
+_VISION_PREFS = ["mimo", "vl", "vision", "pixtral", "llava", "gemma-3"]
 # Ids that are clearly not chat models (embeddings, safety classifiers,
-# speech, image generation). Never auto-pick them for the agent.
-_NON_CHAT = ("embed", "rerank", "guard", "whisper", "tts", "speech", "audio", "flux", "stable-diffusion", "sdxl",
-             "image-gen", "moderation", "bge", "e5-")
+# speech, image or video generation, routers). Never auto-pick them.
+_NON_CHAT = ("embed", "rerank", "guard", "whisper", "asr", "tts", "speech", "audio", "voice", "transcri", "flux",
+             "stable-diffusion", "sdxl", "image", "video", "wan2", "decision", "moderation", "bge", "e5-", "ocr")
 _RETRY_STATUS = {408, 409, 425, 429, 500, 502, 503, 504}
 _PING_TTL_S = 60.0
 
@@ -122,6 +126,15 @@ class VultrProvider(LLMProvider):
                     break
             if not self.model and lower:
                 self.model = next(iter(lower.values()))
+        if not self.fallback_model and self.model:
+            # A second model from another family, so one outage does not stop the run.
+            family = self.model.lower().split("-")[0]
+            for pref in _TEXT_PREFS:
+                hit = next((orig for low, orig in lower.items()
+                            if pref in low and "vl" not in low and not low.startswith(family)), None)
+                if hit:
+                    self.fallback_model = hit
+                    break
         if not self.vision_model and not self._vision_disabled:
             for pref in _VISION_PREFS:
                 hit = next((orig for low, orig in lower.items() if pref in low), None)

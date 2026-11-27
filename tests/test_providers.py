@@ -148,3 +148,13 @@ def test_context_overflow_is_not_mistaken_for_a_missing_model():
     with pytest.raises(ContextTooLong):
         asyncio.run(p.chat([{"role": "user", "content": "x"}]))
     assert calls == ["primary-model"]  # no pointless fallback: a shorter prompt is the fix
+
+
+def test_auto_pick_matches_the_models_that_worked_on_vultr():
+    listing = ["qwen3-asr-1.7b", "wan2.2-t2v-video", "router-decision-1b", "mimo-v2.6-flash", "qwen3.8-27b",
+               "deepseek-v4.1-flash-1017", "qwen3-tts-flash"]
+
+    p = _provider(lambda req: httpx.Response(200, json={"data": [{"id": m} for m in listing]}))
+    p.model, p.fallback_model, p._vision_disabled = "", "", False
+    assert asyncio.run(p.resolve_models()) == ("deepseek-v4.1-flash-1017", "mimo-v2.6-flash")
+    assert p.fallback_model == "qwen3.8-27b"
