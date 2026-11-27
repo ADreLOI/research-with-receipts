@@ -18,7 +18,17 @@ echo "==> docker"
 if ! command -v docker >/dev/null; then
   curl -fsSL https://get.docker.com | sh
 fi
-systemctl enable --now docker
+# Containers resolve names through public resolvers, so DNS keeps working even
+# though the egress guard below drops private and link-local destinations.
+python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path("/etc/docker/daemon.json")
+cfg = json.loads(p.read_text() or "{}") if p.exists() else {}
+cfg.setdefault("dns", ["1.1.1.1", "8.8.8.8"])
+p.parent.mkdir(parents=True, exist_ok=True)
+p.write_text(json.dumps(cfg, indent=2) + "\n")
+PY
+systemctl enable docker && systemctl restart docker
 
 if [[ "${INSTALL_GVISOR:-0}" == "1" ]]; then
   echo "==> gVisor (runsc)"
@@ -42,6 +52,8 @@ netfilter-persistent save || true
 echo "==> app user and venv"
 id rwr >/dev/null 2>&1 || useradd --system --create-home --shell /usr/sbin/nologin rwr
 usermod -aG docker rwr
+# The service sees its home read-only (ProtectHome); give the docker CLI its config dir up front.
+install -d -o rwr -g rwr -m 700 "$(getent passwd rwr | cut -d: -f6)/.docker"
 python3 -m venv "$APP_DIR/.venv"
 "$APP_DIR/.venv/bin/pip" install -q -r "$APP_DIR/requirements.txt"
 [[ -f "$APP_DIR/.env" ]] || cp "$APP_DIR/.env.example" "$APP_DIR/.env"
@@ -62,6 +74,9 @@ sed "s#__APP_DIR__#$APP_DIR#g" "$APP_DIR/deploy/rwr.service" > /etc/systemd/syst
 systemctl daemon-reload
 systemctl enable --now rwr
 
+echo "==> firewall"
+ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
+
 echo "==> caddy (reverse proxy, automatic HTTPS when a domain is given)"
 if ! command -v caddy >/dev/null; then
   apt-get install -y debian-keyring debian-archive-keyring apt-transport-https
@@ -73,8 +88,6 @@ SITE="${DOMAIN:-:80}"
 sed "s#__SITE__#$SITE#g" "$APP_DIR/deploy/Caddyfile" > /etc/caddy/Caddyfile
 systemctl reload caddy || systemctl restart caddy
 
-echo "==> firewall"
-ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp && ufw --force enable
 
 echo
 echo "Done. App: $BASE"

@@ -113,6 +113,9 @@ def cloud_init(pubkey: str, allow_ssh_from: str) -> str:
 ssh_authorized_keys:
   - {pubkey}
 write_files:
+  - path: /etc/docker/daemon.json
+    content: |
+      {{"dns": ["1.1.1.1", "8.8.8.8"]}}
   - path: /opt/rwr-sandbox/Dockerfile
     encoding: b64
     content: {b64(dockerfile)}
