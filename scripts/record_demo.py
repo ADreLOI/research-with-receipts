@@ -41,12 +41,19 @@ def record(question: str) -> None:
         print(f"  FAILED: {run.get('error')}  (nothing promoted)")
         return
     counts = (run.get("answer") or {}).get("counts", {})
-    print(f"  done: {counts}  llm={run.get('llm')}")
+    llm = str(run.get("llm") or "")
+    print(f"  done: {counts}  llm={llm}")
+    if "mock" in llm.lower() and "--allow-mock" not in sys.argv:
+        print("  NOT promoted: this run used the mock policy, not Vultr Inference. Fix the key/model "
+              "(scripts/doctor.py) and record again, or pass --allow-mock.")
+        return
+    if not counts.get("verified"):
+        print("  warning: no verified claims; check this run in the UI before committing it")
     print(f"  promoted -> {promote(run_id, SHIPPED_DIR)}")
 
 
 def main() -> None:
-    picks = [int(a) for a in sys.argv[1:]] or list(range(1, len(QUESTIONS) + 1))
+    picks = [int(a) for a in sys.argv[1:] if a.isdigit()] or list(range(1, len(QUESTIONS) + 1))
     for i in picks:
         record(QUESTIONS[i - 1])
     print("\nReview the runs in the UI, then: git add demo/cassettes && git commit -m 'Record demo cassettes'")
