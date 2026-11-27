@@ -4,7 +4,13 @@
 
 Ask a question. An agent plans the research on Vultr Serverless Inference, then does all the work inside disposable sandboxes on a Vultr VM: it searches, opens pages in a real headless browser, and runs Python for any arithmetic. The answer is a short brief whose every claim links to a **receipt**: the source URL, the exact quote, a screenshot with that quote highlighted, a timestamp and a SHA-256 hash, or the code and output that produced a number. Each claim is then checked mechanically against its receipts and marked `verified`, `partial` or `unverified`.
 
-Live demo: https://78-141-218-240.sslip.io (Vultr Cloud Compute, Amsterdam)
+## Live demo
+
+**https://78-141-218-240.sslip.io** (Vultr Cloud Compute, Amsterdam)
+
+Running a query needs an **access code**, which keeps the Vultr inference credits safe from abuse. Type it in the **Access code** field at the top of the question box, just above the question and the **Research** button. The browser remembers it after the first accepted run. The code comes with the hackathon submission and is not in this repository.
+
+When you self-host, leave `APP_ACCESS_CODE` empty in `.env` to turn the code off.
 
 ## Architecture
 

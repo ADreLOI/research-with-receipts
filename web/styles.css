@@ -182,10 +182,29 @@ pre { white-space: pre-wrap; word-break: break-word; margin: 0; }
 .ask textarea::placeholder { color: var(--muted); }
 .ask-foot { display: flex; align-items: center; gap: 12px; padding: 8px 10px 10px 18px; flex-wrap: wrap; }
 .ask-foot .btn.primary { margin-left: auto; }
-.access {
-  height: 32px; width: 150px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-ctl);
-  background: var(--raised); font-size: 13px;
+/* Access code: the first row of the ask card whenever the server needs one. */
+.access-row {
+  display: grid; grid-template-columns: auto minmax(0, 340px); align-items: center; gap: 8px 16px;
+  padding: 12px 16px 12px 18px; background: var(--sunken); border-bottom: 1px solid var(--line);
+  border-radius: calc(var(--r-card) - 1px) calc(var(--r-card) - 1px) 0 0;
+  transition: background-color 200ms var(--ease);
 }
+.access-label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--ink); }
+.access-label .ic { width: 16px; height: 16px; color: var(--accent-ink); }
+.access {
+  height: 38px; width: 100%; padding: 0 12px; border: 1px solid var(--line-strong); border-radius: var(--r-ctl);
+  background: var(--surface); font-size: 14px; color: var(--ink);
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+}
+.access::placeholder { color: var(--muted); }
+.access:focus { outline: 0; border-color: var(--ink); box-shadow: 0 0 0 3px var(--accent-soft); }
+.access-msg { grid-column: 1 / -1; margin: 0; font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.access-row.invalid { background: var(--bad-soft); }
+.access-row.invalid .access-label .ic { color: var(--bad); }
+.access-row.invalid .access { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 18%, transparent); }
+.access-row.invalid .access-msg { color: var(--bad); font-weight: 500; }
+.access-row.nudge { animation: nudge 300ms var(--ease); }
+@keyframes nudge { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
 .kbd-hint { display: inline-flex; gap: 3px; margin-left: auto; color: var(--muted); }
 .kbd-hint + .btn.primary { margin-left: 0; }
 kbd {
@@ -236,7 +255,8 @@ kbd {
 /* Run mode: the hero folds into a compact question bar. */
 body.is-run .hero { max-width: 1320px; padding: 20px 24px 0; }
 body.is-run .hero > :not(.ask) { display: none; }
-body.is-run .ask { margin-top: 0; display: flex; align-items: flex-end; }
+body.is-run .ask { margin-top: 0; display: flex; flex-wrap: wrap; align-items: flex-end; }
+body.is-run .access-row { flex: 0 0 100%; }
 body.is-run .ask textarea { min-height: 52px; padding: 14px 16px; font-size: 16px; flex: 1; }
 body.is-run .ask-foot { padding: 8px 8px 8px 0; flex-wrap: nowrap; }
 body.is-run .kbd-hint { display: none; }
@@ -525,6 +545,7 @@ dialog.sheet.side[open] { animation: slideIn 280ms var(--ease); }
   body.is-run .ask-foot { padding: 8px 8px 8px 12px; flex-wrap: wrap; }
   .receipt-grid pre { max-height: 220px; }
   .ask-foot .btn.primary { margin-left: auto; }
+  .access-row { grid-template-columns: minmax(0, 1fr); padding: 12px 14px; }
   .run { padding: 20px 16px 48px; gap: 20px; }
   .claim { grid-template-columns: minmax(0, 1fr); }
   .thumb-btn, .thumb-empty { max-width: 320px; }

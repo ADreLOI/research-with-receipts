@@ -247,11 +247,15 @@ def fetch(req: dict) -> dict:
 HIGHLIGHT_JS = r"""
 (args) => {
   const [quote, stamp] = args;
-  // Compare text with all whitespace removed so line breaks, inline tags and
-  // indentation in the DOM do not defeat the match.
-  const fold = (c) => ({'‘': "'", '’': "'", '“': '"', '”': '"', '–': '-', '—': '-'}[c] || c);
-  const squash = (s) => Array.from(s || '').filter((c) => !/\s/.test(c)).map((c) => fold(c).toLowerCase()).join('');
+  // Compare letters and digits only (after NFKC folding), so whitespace,
+  // line breaks, inline tags, soft hyphens, hyphen and dash variants, curly
+  // quotes and other punctuation in the DOM cannot defeat the match.
+  const keep = /[\p{L}\p{N}]/u;
+  const fold = (c) => (c.charCodeAt(0) < 128 ? c : c.normalize('NFKC')).toLowerCase();
+  const squash = (s) => { let o = ''; for (const c of String(s || '')) { const f = fold(c); for (const x of f) if (keep.test(x)) o += x; } return o; };
   const skip = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE']);
+  // Instant scrolling, so the screenshot is not taken halfway through a smooth scroll.
+  try { document.documentElement.style.scrollBehavior = 'auto'; if (document.body) document.body.style.scrollBehavior = 'auto'; } catch (e) {}
   // No NodeFilter callback: pages served with a CSP "sandbox" directive (raw
   // text hosts, for example) disable scripting, and the browser then refuses
   // to run DOM callbacks ("callback is no longer runnable"). Filter in the loop.
@@ -262,11 +266,39 @@ HIGHLIGHT_JS = r"""
     const n = walker.currentNode, v = n.nodeValue;
     if (!n.parentElement || skip.has(n.parentElement.tagName)) continue;
     for (let i = 0; i < v.length; i++) {
-      if (/\s/.test(v[i])) continue;
-      flat += fold(v[i]).toLowerCase();
-      map.push([n, i]);
+      const f = fold(v[i]);
+      for (const x of f) if (keep.test(x)) { flat += x; map.push([n, i]); }
     }
   }
+  // Why a located quote would not be visible in a screenshot, or '' if it is.
+  const bgOf = (el) => {
+    for (let e = el; e; e = e.parentElement) {
+      const m = getComputedStyle(e).backgroundColor.match(/[\d.]+/g);
+      if (m && (m.length < 4 || +m[3] > 0.5)) return m.slice(0, 3).map(Number);
+    }
+    return [255, 255, 255];
+  };
+  const lum = (rgb) => { const c = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const hiddenWhy = (el, rects) => {
+    if (!rects.length) return 'not rendered on the page (display:none or collapsed)';
+    let opacity = 1;
+    for (let e = el; e; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.visibility === 'hidden' || cs.visibility === 'collapse') return 'set to visibility:hidden';
+      opacity *= parseFloat(cs.opacity || '1');
+    }
+    if (opacity < 0.15) return 'transparent text';
+    const cs = getComputedStyle(el);
+    if (parseFloat(cs.fontSize) < 6) return `tiny text (${cs.fontSize})`;
+    const fg = (cs.color.match(/[\d.]+/g) || [0, 0, 0]).slice(0, 3).map(Number);
+    const a = lum(fg), b = lum(bgOf(el));
+    if ((Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) < 1.3) return 'text coloured like its background';
+    const r = rects[0], W = document.documentElement.scrollWidth, H = document.documentElement.scrollHeight;
+    if (r.right + window.scrollX < 0 || r.bottom + window.scrollY < 0 || r.left + window.scrollX > W || r.top + window.scrollY > H)
+      return 'positioned off-screen';
+    return '';
+  };
   const words = (quote || '').trim().split(/\s+/).filter(Boolean);
   const cands = [];
   if (words.length) {
@@ -274,37 +306,47 @@ HIGHLIGHT_JS = r"""
     for (const k of [20, 14, 10, 7, 5]) if (words.length > k) cands.push(words.slice(0, k).join(' '));
     for (const k of [14, 10, 7]) if (words.length > k) cands.push(words.slice(-k).join(' '));
   }
-  let found = '', rects = [];
+  // The first visible occurrence wins: docs sites often repeat text in a
+  // hidden menu, tab or print copy before the visible one.
+  let best = null;
   for (const c of cands) {
     const q = squash(c);
     if (q.length < 12) continue;
-    const idx = flat.indexOf(q);
-    if (idx < 0) continue;
-    const [sn, so] = map[idx];
-    const [en, eo] = map[idx + q.length - 1];
-    const range = document.createRange();
-    range.setStart(sn, so);
-    range.setEnd(en, eo + 1);
-    const el = sn.parentElement;
-    if (el) el.scrollIntoView({block: 'center'});
-    rects = Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
-    found = c;
-    break;
+    for (let idx = flat.indexOf(q), seen = 0; idx >= 0 && seen < 25; idx = flat.indexOf(q, idx + 1), seen++) {
+      const [sn, so] = map[idx];
+      const [en, eo] = map[idx + q.length - 1];
+      const range = document.createRange();
+      range.setStart(sn, so);
+      range.setEnd(en, eo + 1);
+      const el = sn.parentElement;
+      const pick = {c, range, el, hidden: hiddenWhy(el, Array.from(range.getClientRects()).filter((r) => r.width > 0 && r.height > 0))};
+      if (!pick.hidden) { best = pick; break; }
+      if (!best) best = pick;
+    }
+    if (best && !best.hidden) break;
   }
+  let rects = [];
+  if (best) {
+    if (best.el) best.el.scrollIntoView({block: 'center', inline: 'nearest', behavior: 'instant'});
+    rects = Array.from(best.range.getClientRects()).filter((r) => r.width > 0 && r.height > 0);
+  }
+  // Overlays go on <html> with document coordinates, so a positioned or
+  // transformed <body> cannot shift them away from the text.
+  const root = document.documentElement;
   for (const r of rects) {
     const d = document.createElement('div');
     Object.assign(d.style, {position: 'absolute', left: (r.left + window.scrollX - 2) + 'px',
-      top: (r.top + window.scrollY - 2) + 'px', width: (r.width + 4) + 'px', height: (r.height + 4) + 'px',
+      top: (r.top + window.scrollY - 2) + 'px', width: (r.width + 4) + 'px', height: Math.max(r.height + 4, 10) + 'px',
       background: 'rgba(255, 221, 0, 0.45)', outline: '2px solid #e0a800', zIndex: 2147483646,
-      pointerEvents: 'none', borderRadius: '2px'});
-    document.body.appendChild(d);
+      pointerEvents: 'none', borderRadius: '2px', margin: '0'});
+    root.appendChild(d);
   }
   const b = document.createElement('div');
-  b.textContent = stamp;
+  b.textContent = best && best.hidden ? `${stamp} · quoted text is hidden on the page: ${best.hidden}` : stamp;
   Object.assign(b.style, {position: 'fixed', left: '0', right: '0', bottom: '0', padding: '6px 10px',
     font: '12px/1.3 monospace', color: '#fff', background: 'rgba(20, 20, 30, 0.85)', zIndex: 2147483647});
-  document.body.appendChild(b);
-  return {found: !!found && rects.length > 0, matched: found};
+  root.appendChild(b);
+  return {found: !!best && rects.length > 0, matched: best ? best.c : '', hidden: best ? best.hidden : ''};
 }
 """
 
@@ -364,7 +406,7 @@ def screenshot(req: dict) -> dict:
         captured_at = now_iso()
         stamp = f"receipt · {captured_at} · {final_url[:120]}"
         hl = _highlight(page, highlight, stamp)
-        if highlight and not hl.get("found") and _plain_text(resp, page):
+        if highlight and not hl.get("found") and not hl.get("hidden") and _plain_text(resp, page):
             # Plain-text page that could not be highlighted in place: show the
             # same captured text in a neutral <pre> view and highlight it there.
             # The stamp says so, the URL and text in the receipt are unchanged.
@@ -375,11 +417,13 @@ def screenshot(req: dict) -> dict:
                 hl = _highlight(page, highlight, stamp + " · plain-text view")
             except Exception as exc:  # noqa: BLE001 - keep the original rendering
                 hl["error"] = f"plain-text view failed: {type(exc).__name__}"
+        page.wait_for_timeout(150)  # let lazy images and sticky headers settle after the scroll
         png = page.screenshot(type="jpeg", quality=72, full_page=False)
         browser.close()
     return {"url": final_url, "status": resp.status if resp else 0, "title": title, "text": text,
             "captured_at": captured_at, "highlight_found": bool(hl.get("found")),
             "highlight_matched": hl.get("matched", ""), "highlight_error": hl.get("error", ""),
+            "highlight_hidden": str(hl.get("hidden") or "")[:120],
             "blocked_requests": blocked[:20],
             "image_b64": base64.b64encode(png).decode(), "image_mime": "image/jpeg"}
 

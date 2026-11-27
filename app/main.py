@@ -81,6 +81,13 @@ async def health() -> dict:
             "public_base_url": settings.public_base_url}
 
 
+@app.post("/api/access")
+async def check_access(x_access_code: str | None = Header(default=None)) -> dict:
+    """Lets the UI check an access code before it opens the containment test."""
+    _check_code(x_access_code)
+    return {"ok": True}
+
+
 @app.post("/api/runs")
 async def create_run(body: RunRequest, x_access_code: str | None = Header(default=None)) -> dict:
     _check_code(x_access_code)

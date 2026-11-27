@@ -37,6 +37,9 @@ class Receipt:
     sha256: str = ""
     highlight: str = ""
     highlight_found: bool = False
+    # Set when the quote was located in the page but is hidden from view
+    # (tiny, transparent, off-screen...). The text is evidence, the image is not.
+    highlight_hidden: str = ""
     blocked_requests: list[str] = field(default_factory=list)
     evidence_for: list[int] = field(default_factory=list)
 
@@ -215,8 +218,12 @@ def verify_claim(claim: dict[str, Any], store: ReceiptStore) -> dict[str, Any]:
         score, span = match_quote(quote, haystack) if quote else (0.0, "")
         best = max(best, score)
         checks.append({"receipt_id": r.id, "exists": True, "kind": r.kind, "score": score, "span": span[:200],
-                       "highlight_found": r.highlight_found if r.kind == "page" else None})
-    visual = any(c.get("highlight_found") or c.get("kind") == "code" for c in checks if c.get("score", 0) >= 0.9)
+                       "highlight_found": r.highlight_found if r.kind == "page" else None,
+                       "highlight_hidden": r.highlight_hidden if r.kind == "page" else ""})
+    # The live page must confirm the quote: highlighted on screen, located in
+    # the page but hidden from view (text-only evidence), or produced by code.
+    visual = any(c.get("highlight_found") or c.get("highlight_hidden") or c.get("kind") == "code"
+                 for c in checks if c.get("score", 0) >= 0.9)
     if best >= 0.9 and visual and not claim.get("quote_snapped"):
         status = "verified"
     elif best >= 0.6:

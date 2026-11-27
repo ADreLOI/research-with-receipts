@@ -6,6 +6,7 @@ Environment:
   LLM_MODEL                 model id; empty = auto-pick from GET /models
   LLM_FALLBACK_MODEL        tried when the primary model is missing or failing
   VISION_MODEL              vision model id; empty = auto-pick, "none" = off
+  VISION_MAX_TOKENS         token budget for the vision check (reasoning models think first)
   LLM_MAX_RETRIES           retries on 429 / 5xx / timeouts (exponential backoff)
   LLM_TIMEOUT_S             per-request timeout
 """
@@ -20,7 +21,7 @@ from typing import Any
 import httpx
 
 from ..config import settings
-from ..llm import ContextTooLong, LLMError, extract_json, is_context_error, strip_reasoning
+from ..llm import ContextTooLong, EmptyReply, LLMError, extract_json, is_context_error, strip_reasoning
 from .base import LLMProvider, ProviderInfo
 
 log = logging.getLogger(__name__)
@@ -190,9 +191,9 @@ class VultrProvider(LLMProvider):
             if isinstance(reasoning, str) and "{" in reasoning:
                 return reasoning[reasoning.rfind("{\"thought\""):] if '{"thought"' in reasoning else reasoning
             if choice.get("finish_reason") == "length":
-                raise LLMError(f"model {model!r} hit max_tokens before answering; raise LLM_MAX_TOKENS or pick a "
-                               "non-reasoning model with LLM_MODEL")
-            raise LLMError(f"model {model!r} returned an empty reply")
+                raise LLMError(f"model {model!r} hit max_tokens before answering; raise LLM_MAX_TOKENS "
+                               "(VISION_MAX_TOKENS for the vision check) or pick a non-reasoning model")
+            raise EmptyReply(f"model {model!r} returned an empty reply")
         return content
 
     async def chat(self, messages: list[dict[str, Any]], *, max_tokens: int | None = None,
@@ -202,7 +203,13 @@ class VultrProvider(LLMProvider):
         temperature = settings.llm_temperature if temperature is None else temperature
         primary = self.active_model or model
         try:
-            text = await self._complete(primary, messages, max_tokens, temperature)
+            try:
+                text = await self._complete(primary, messages, max_tokens, temperature)
+            except EmptyReply as exc:
+                # A blank answer is usually a one-off on serverless endpoints:
+                # ask the same model once more before switching models.
+                log.warning("%s; asking %s once more", exc, primary)
+                text = await self._complete(primary, messages, max_tokens, temperature)
             self.active_model = primary
             return text
         except ContextTooLong:
@@ -226,7 +233,7 @@ class VultrProvider(LLMProvider):
             {"type": "text", "text": prompt},
             {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{image_b64}"}}]}]
         try:
-            raw = await self._complete(vmodel, messages, 200, 0, retries=1)
+            raw = await self._complete(vmodel, messages, settings.vision_max_tokens, 0, retries=1)
             out = extract_json(raw)
             return {"model": vmodel, "supports": bool(out.get("supports")), "reason": str(out.get("reason", ""))[:300]}
         except (LLMError, ValueError) as exc:

@@ -81,6 +81,9 @@ def test_input_validation_and_404s(client):
 def test_access_code_is_enforced(client):
     with override(access_code="letmein"):
         assert client.post("/api/runs", json={"question": "Is this gated?"}).status_code == 401
+        assert client.get("/api/health").json()["access_code_required"] is True  # the UI shows the field from this
+        assert client.post("/api/access", headers={"X-Access-Code": "wrong"}).status_code == 401
+        assert client.post("/api/access", headers={"X-Access-Code": "letmein"}).json() == {"ok": True}
         ok = client.post("/api/runs", json={"question": "Is this gated?"}, headers={"X-Access-Code": "letmein"})
         assert ok.status_code == 200
         _wait(client, ok.json()["id"])

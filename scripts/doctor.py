@@ -84,7 +84,7 @@ async def check_docker() -> bool:
     return True
 
 
-async def check_inference() -> None:
+async def check_model() -> None:
     if not settings.inference_api_key:
         report("FAIL", "llm", "no VULTR_INFERENCE_API_KEY, skipped")
         return
@@ -199,7 +199,7 @@ async def main() -> int:
     print(f"rwr doctor  {time.strftime('%Y-%m-%d %H:%M:%S %Z')}  repo={ROOT}")
     check_config()
     docker_ok = await check_docker()
-    await check_inference()
+    await check_model()
     if docker_ok and not args.quick:
         await check_sandbox()
     check_app(args.app.rstrip("/"))

@@ -15,6 +15,10 @@ class ContextTooLong(LLMError):
     """The conversation no longer fits the model's context window."""
 
 
+class EmptyReply(LLMError):
+    """The model answered with no content at all (often transient on serverless endpoints)."""
+
+
 _CTX_HINTS = ("context length", "context_length", "context window", "maximum context", "too many tokens",
               "prompt is too long", "input is too long", "reduce the length", "exceeds the maximum")
 

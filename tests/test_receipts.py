@@ -31,3 +31,8 @@ def test_verify_claim_statuses(tmp_path: Path):
     assert verify_claim(text_only, store)["status"] == "partial"
     bogus = {"text": "x", "receipt_ids": ["R9"], "quote": "anything"}
     assert verify_claim(bogus, store)["status"] == "unverified"
+    # Located in the live page but hidden from view: text-only evidence still counts.
+    hidden = store.add(Receipt(id="R3", kind="page", tool="evidence", step=1, captured_at="", sandbox="t", text=TEXT,
+                               highlight_hidden="not rendered on the page (display:none or collapsed)"))
+    located = {"text": "x", "receipt_ids": [page.id, hidden.id], "quote": "an application kernel, written in Go"}
+    assert verify_claim(located, store)["status"] == "verified"

@@ -87,6 +87,8 @@ class Settings:
     inference_api_key: str = field(default_factory=lambda: _env("VULTR_INFERENCE_API_KEY"))
     llm_model: str = field(default_factory=lambda: _env("LLM_MODEL"))
     vision_model: str = field(default_factory=lambda: _env("VISION_MODEL"))
+    # Vision models such as mimo reason before answering; 200 tokens was not enough.
+    vision_max_tokens: int = field(default_factory=lambda: _env_int("VISION_MAX_TOKENS", 1500))
     llm_temperature: float = field(default_factory=lambda: _env_float("LLM_TEMPERATURE", 0.2))
     llm_max_tokens: int = field(default_factory=lambda: _env_int("LLM_MAX_TOKENS", 4000))
     # auto: vultr when VULTR_INFERENCE_API_KEY is set, else mock. vultr | mock force one.

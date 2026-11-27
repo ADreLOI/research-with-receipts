@@ -9,6 +9,7 @@ const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").match
 const store = {
   get(k) { try { return localStorage.getItem(k) || ""; } catch { return ""; } },
   set(k, v) { try { localStorage.setItem(k, v); } catch { /* storage may be blocked */ } },
+  del(k) { try { localStorage.removeItem(k); } catch { /* storage may be blocked */ } },
 };
 
 function esc(s) {
@@ -21,7 +22,7 @@ function pad2(n) { return String(n).padStart(2, "0"); }
 
 async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  const code = $("#access").value || store.get("rwr-code");
+  const code = accessCode();
   if (code) headers["X-Access-Code"] = code;
   const r = await fetch(path, { ...opts, headers });
   if (!r.ok) {
@@ -80,7 +81,7 @@ async function loadHealth() {
     } else {
       setChip($("#pill-llm"), "warn", "Mock policy", st.detail || "");
     }
-    $("#access").hidden = !h.access_code_required;
+    syncAccess();
     renderExamples(h.public_base_url);
     syncReplayToggle();
     return true;
@@ -165,6 +166,52 @@ function setMode(mode) {
   $("#run").hidden = mode !== "run";
 }
 
+// ------------------------------------------------------------ access code
+
+const ACCESS_HELP = "This deployment is invite-only. Enter your code to run research.";
+
+function accessRequired() { return !!(state.health && state.health.access_code_required); }
+function accessCode() { return $("#access").value.trim() || store.get("rwr-code"); }
+
+// Show the access row, optionally as an error ("missing" or "wrong"), and put
+// the cursor in it so the next keystroke goes to the right place.
+function showAccess(problem = "") {
+  const row = $("#access-row"), input = $("#access");
+  row.hidden = false;
+  row.classList.toggle("invalid", !!problem);
+  $("#access-msg").textContent = problem === "wrong" ? "That access code wasn't accepted. Check it and press Research again."
+    : problem === "missing" ? "Enter the access code first. Research only runs on this deployment with a valid code."
+    : ACCESS_HELP;
+  if (!problem) { input.removeAttribute("aria-invalid"); return; }
+  input.setAttribute("aria-invalid", "true");
+  input.focus({ preventScroll: true });
+  if (problem === "wrong") input.select();
+  row.scrollIntoView({ block: "center", behavior: reduceMotion ? "auto" : "smooth" });
+  if (!reduceMotion) { row.classList.remove("nudge"); void row.offsetWidth; row.classList.add("nudge"); }
+}
+
+// The row is visible whenever the server needs a code and none is saved yet.
+function syncAccess() {
+  const row = $("#access-row");
+  if (!accessRequired()) { row.hidden = true; return; }
+  if (!store.get("rwr-code")) { if (!row.classList.contains("invalid")) showAccess(); }
+  else if (!row.classList.contains("invalid")) row.hidden = true;
+}
+
+// A request was accepted: remember a typed code and fold the row away.
+function acceptAccess() {
+  const typed = $("#access").value.trim();
+  if (typed) store.set("rwr-code", typed);
+  $("#access-row").classList.remove("invalid");
+  syncAccess();
+}
+
+function rejectAccess() {
+  const typed = $("#access").value.trim();
+  store.del("rwr-code");
+  showAccess(typed ? "wrong" : "missing");
+}
+
 // ------------------------------------------------------------ run lifecycle
 
 function setBusy(busy, label = "Research") {
@@ -176,16 +223,18 @@ function setBusy(busy, label = "Research") {
 
 async function startRun(question, mode) {
   state.lastQuestion = question;
+  if (accessRequired() && !accessCode()) { showAccess("missing"); return; }
   setBusy(true, mode === "replay" ? "Starting replay" : "Starting sandbox");
   try {
-    const code = $("#access").value; if (code) store.set("rwr-code", code);
     mode = mode || ($("#replay").checked ? "replay" : "auto");
     const { id } = await api("/api/runs", { method: "POST", body: JSON.stringify({ question, mode }) });
+    acceptAccess();
     location.hash = `run=${id}`;
   } catch (e) {
     setBusy(false);
-    const msg = e.status === 401 ? "This deployment needs an access code. Enter it next to the Research button and try again."
-      : e.status === 422 ? "Please ask a question of at least 5 characters." : e.message;
+    // A missing or wrong code is fixed in place, next to the question.
+    if (e.status === 401) { rejectAccess(); return; }
+    const msg = e.status === 422 ? "Please ask a question of at least 5 characters." : e.message;
     setMode("run");
     renderError({ question, error: `Could not start the run: ${msg}` });
   }
@@ -345,7 +394,9 @@ function renderRun(run) {
     const thumb = ev && ev.has_image
       ? `<button type="button" class="thumb-btn" data-r="${ev.id}" aria-label="Open receipt ${ev.id}"><img loading="lazy" alt="Screenshot receipt ${ev.id}" src="/api/runs/${run.id}/receipts/${ev.id}/image"></button>`
       : `<div class="thumb-empty">${icon("page")}<span>${ids.length ? "Text receipt" : "No receipt"}</span><span class="mono">${esc(ids.join(" · "))}</span></div>`;
-    const vision = v.vision ? `<span>vision ${v.vision.supports === true ? "agrees" : v.vision.supports === false ? "disagrees" : "skipped"}</span>` : "";
+    const vision = !v.vision ? ""
+      : v.vision.text_only ? `<span title="${esc(v.vision.reason || "")}">text-only evidence: hidden on the page</span>`
+      : `<span title="${esc(v.vision.reason || "")}">vision ${v.vision.supports === true ? "agrees" : v.vision.supports === false ? "disagrees" : "skipped"}</span>`;
     const chips = ids.map((r) => `<button type="button" class="cite" data-r="${esc(r)}">${esc(r)}</button>`).join("");
     return `<li class="claim in" style="animation-delay:${Math.min(i, 8) * 70}ms" data-claim="${i}" data-rids="${esc(ids.join(" "))}">
       <div>
@@ -667,7 +718,7 @@ async function showReceipt(rid, fromEl) {
         <dt>sandbox</dt><dd>${esc(r.sandbox)}</dd>
         <dt>sha256</dt><dd>${esc(r.sha256)}</dd>
         ${cites.length ? `<dt>supports</dt><dd>claim ${cites.map((i) => i + 1).join(", ")}</dd>` : ""}
-        ${r.highlight ? `<dt>highlight</dt><dd>${r.highlight_found ? "found on page" : "not found"}</dd><dt>quote</dt><dd>${esc(short(r.highlight, 300))}</dd>` : ""}
+        ${r.highlight ? `<dt>highlight</dt><dd>${r.highlight_hidden ? `in the page but hidden from view (${esc(r.highlight_hidden)})` : r.highlight_found ? "found on page" : "not found"}</dd><dt>quote</dt><dd>${esc(short(r.highlight, 300))}</dd>` : ""}
         ${r.exit_code !== null && r.exit_code !== undefined ? `<dt>exit code</dt><dd>${r.exit_code}</dd>` : ""}
         ${r.blocked_requests && r.blocked_requests.length ? `<dt>blocked</dt><dd>${esc(r.blocked_requests.join(", "))}</dd>` : ""}
       </dl>
@@ -688,13 +739,19 @@ async function showReceipt(rid, fromEl) {
 
 // ------------------------------------------------------------ containment test
 
-function runContainment() {
+async function runContainment() {
+  if (accessRequired()) {
+    if (!accessCode()) { showAccess("missing"); return; }
+    try { await api("/api/access", { method: "POST" }); acceptAccess(); } catch (e) {
+      if (e.status === 401) { rejectAccess(); return; }
+    }
+  }
   const dlg = $("#contain");
   $("#contain-list").innerHTML = '<li class="pending"><span class="spinner" aria-hidden="true"></span> Starting a fresh sandbox…</li>';
   $("#contain-done").innerHTML = "";
   $("#contain-sandbox").innerHTML = "";
   dlg.showModal();
-  const code = $("#access").value || store.get("rwr-code");
+  const code = accessCode();
   const es = new EventSource(`/api/containment-test${code ? `?code=${encodeURIComponent(code)}` : ""}`);
   const TOTAL = 8;
   let first = true, n = 0, held = 0;
@@ -748,6 +805,9 @@ $$("dialog").forEach((d) => d.addEventListener("click", (e) => { if (e.target ==
 $("#history").addEventListener("click", (e) => { if (e.target.closest("a")) $("#history-sheet").close(); });
 $("#ask").addEventListener("submit", (e) => { e.preventDefault(); const q = $("#q").value.trim(); if (q) startRun(q); });
 $("#q").addEventListener("input", () => { autosize(); syncReplayToggle(); });
+$("#access").addEventListener("input", () => {
+  if ($("#access-row").classList.contains("invalid")) showAccess();
+});
 $("#q").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) $("#ask").requestSubmit(); });
 $("#btn-contain").addEventListener("click", runContainment);
 $("#btn-history").addEventListener("click", () => { loadHistory(); $("#history-sheet").showModal(); });

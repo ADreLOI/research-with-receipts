@@ -6,6 +6,7 @@ import pytest
 
 import app.agent as agent_mod
 from app.agent import execute_run
+from app.config import settings
 from app.llm import LLMError
 from app.providers import MockProvider, VultrProvider
 from app.runs import registry
@@ -158,3 +159,34 @@ def test_auto_pick_matches_the_models_that_worked_on_vultr():
     p.model, p.fallback_model, p._vision_disabled = "", "", False
     assert asyncio.run(p.resolve_models()) == ("deepseek-v4.1-flash-1017", "mimo-v2.6-flash")
     assert p.fallback_model == "qwen3.8-27b"
+
+
+def test_empty_reply_asks_the_primary_again_before_falling_back():
+    calls = []
+    replies = iter([{"choices": [{"message": {"content": ""}, "finish_reason": "stop"}]}, _reply("second try")])
+
+    def handler(req):
+        calls.append(json.loads(req.content)["model"])
+        return httpx.Response(200, json=next(replies))
+
+    p = _provider(handler)
+    p.fallback_model = "backup-model"
+    assert asyncio.run(p.chat([{"role": "user", "content": "a"}])) == "second try"
+    assert calls == ["primary-model", "primary-model"]
+    assert p.active_model == "primary-model"
+
+
+def test_vision_check_gets_its_own_token_budget():
+    seen = {}
+
+    def handler(req):
+        body = json.loads(req.content)
+        seen["model"], seen["max_tokens"] = body["model"], body["max_tokens"]
+        return httpx.Response(200, json=_reply('{"supports": true, "reason": "highlighted"}'))
+
+    p = _provider(handler)
+    p.vision_model, p._vision_disabled = "vision-model", False
+    out = asyncio.run(p.vision_check("claim", "quote", "aGk=", "image/jpeg"))
+    assert out["supports"] is True
+    assert seen == {"model": "vision-model", "max_tokens": settings.vision_max_tokens}
+    assert settings.vision_max_tokens >= 1000  # 200 left mimo no room to answer

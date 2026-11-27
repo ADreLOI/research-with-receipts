@@ -232,3 +232,37 @@ def test_quote_repair_failure_leaves_the_claim_alone(monkeypatch):
     ])
     assert run.status == "done", run.error
     assert not run.answer["claims"][0].get("quote_repaired")
+
+
+class HiddenTextSandbox(CountingSandbox):
+    """The quote is on the page but styled out of sight, like a prompt injection."""
+
+    async def screenshot(self, url, highlight=""):
+        res = await super().screenshot(url, highlight)
+        if highlight:
+            res.data["highlight_hidden"] = "tiny text (2px)"
+        return res
+
+
+class NoVisionProvider(ScriptedProvider):
+    async def vision_check(self, claim, quote, image_b64, mime):
+        raise AssertionError("vision must not judge hidden text")
+
+
+def test_hidden_quote_is_text_only_evidence_without_a_vision_call(monkeypatch):
+    provider = NoVisionProvider([act("screenshot", url=GVISOR), final(claim("gVisor ships runsc.", ["R1"],
+                                                                            GVISOR_QUOTE))])
+    sandbox = HiddenTextSandbox()
+
+    async def make():
+        return sandbox
+
+    monkeypatch.setattr(agent_mod, "make_live_provider", lambda: provider)
+    monkeypatch.setattr(agent_mod, "make_sandbox", make)
+    run = registry.create("What is gVisor?")
+    asyncio.run(execute_run(run))
+    assert run.status == "done", run.error
+    v = run.answer["claims"][0]["verification"]
+    assert v["status"] == "verified"
+    assert v["vision"]["text_only"] and "hidden" in v["vision"]["reason"]
+    assert run.receipts.get(run.answer["claims"][0]["evidence_id"]).highlight_hidden == "tiny text (2px)"

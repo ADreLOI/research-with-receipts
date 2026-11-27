@@ -156,6 +156,7 @@ class Agent:
                       captured_at=d.get("captured_at", ""), sandbox=self._sandbox_tag(), url=d.get("url", ""),
                       title=d.get("title", ""), text=d.get("text", ""), highlight=highlight,
                       highlight_found=bool(d.get("highlight_found")),
+                      highlight_hidden=str(d.get("highlight_hidden") or ""),
                       blocked_requests=list(d.get("blocked_requests", [])))
         return self.run.receipts.add(rec, d.get("image_b64", ""), d.get("image_mime", ""))
 
@@ -325,7 +326,9 @@ class Agent:
                     done[key] = ev.id
                     self.run.emit("tool_result", step=rec.step, tool="evidence", ok=True, receipt_id=ev.id,
                                   duration_s=round(res.duration_s, 2), contained="",
-                                  summary=f"highlight {'found' if ev.highlight_found else 'not found'} on page",
+                                  summary=(f"quote located but hidden on the page ({ev.highlight_hidden})"
+                                           if ev.highlight_hidden else
+                                           f"highlight {'found' if ev.highlight_found else 'not found'} on page"),
                                   url=ev.url)
                 else:
                     self.run.emit("tool_result", step=rec.step, tool="evidence", ok=False, error=res.error[:300],
@@ -339,7 +342,13 @@ class Agent:
                 ids.append(claim["evidence_id"])
             result = verify_claim({**claim, "receipt_ids": ids}, self.run.receipts)
             ev = self.run.receipts.get(claim.get("evidence_id", "")) if claim.get("evidence_id") else None
-            if ev and ev.image_file and ev.image_mime != "image/svg+xml":
+            if ev and ev.highlight_hidden:
+                # A screenshot cannot show hidden text, so asking a vision model
+                # would only produce a false "does not support".
+                result["vision"] = {"model": "", "supports": None, "text_only": True,
+                                    "reason": f"text-only evidence: the quote is in the page but hidden from view "
+                                              f"({ev.highlight_hidden}), so the screenshot cannot show it"}
+            elif ev and ev.image_file and ev.image_mime != "image/svg+xml":
                 img = base64.b64encode((self.run.receipts.dir / ev.image_file).read_bytes()).decode()
                 vc = await self.provider.vision_check(claim.get("text", ""), claim.get("quote", ""), img,
                                                       ev.image_mime)
