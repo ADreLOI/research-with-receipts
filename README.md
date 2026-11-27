@@ -10,6 +10,8 @@ Ask a question. An agent plans the research on Vultr Serverless Inference, then 
 
 Running a query needs an **access code**, which keeps the Vultr inference credits safe from abuse. Type it in the **Access code** field at the top of the question box, just above the question and the **Research** button. The browser remembers it after the first accepted run. The code comes with the hackathon submission and is not in this repository.
 
+Then click one of the three demo questions under the box to fill it in, or type your own, and press **Research**. The third sends the agent to a hostile page, and **Run containment test** in the header throws eight attacks at a fresh sandbox.
+
 When you self-host, leave `APP_ACCESS_CODE` empty in `.env` to turn the code off.
 
 ## Architecture
