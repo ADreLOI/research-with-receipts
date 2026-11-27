@@ -209,6 +209,7 @@ All settings are environment variables; see [`.env.example`](.env.example). The 
 * Demo questions and the terminal runner (`python scripts/demo.py 1`) plus the recorder (`python scripts/record_demo.py`): [`scripts/demo.py`](scripts/demo.py), [`scripts/record_demo.py`](scripts/record_demo.py)
 * 2-minute demo script with timings, voice-over and fallback lines: [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md)
 * Submission text, ready to paste: [`docs/SUBMISSION.md`](docs/SUBMISSION.md)
+* Copy-paste deployment checklist: [`docs/DEPLOY_CHECKLIST.md`](docs/DEPLOY_CHECKLIST.md)
 
 ## Team
 

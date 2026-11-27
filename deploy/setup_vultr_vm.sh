@@ -5,6 +5,8 @@
 # Afterwards edit /opt/rwr/.env (add VULTR_INFERENCE_API_KEY) and run:
 #   systemctl restart rwr
 set -euo pipefail
+# iptables-persistent and friends must not stop at interactive debconf prompts.
+export DEBIAN_FRONTEND=noninteractive
 APP_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DOMAIN="${1:-}"
 
