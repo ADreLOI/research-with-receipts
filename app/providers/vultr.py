@@ -143,7 +143,7 @@ class VultrProvider(LLMProvider):
                     break
         if not self.model:
             raise LLMError("No LLM_MODEL configured and GET /models returned nothing. Set LLM_MODEL "
-                           "(see scripts/check_inference.py).")
+                           "(see scripts/doctor.py).")
         return self.model, self.vision_model
 
     async def describe(self) -> ProviderInfo:
