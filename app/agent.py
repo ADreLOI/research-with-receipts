@@ -18,6 +18,7 @@ import httpx
 from .cassettes import Cassette, Recorder
 from .config import settings
 from .llm import LLMError, extract_json
+from .normalize import normalize_action, normalize_claims
 from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
 from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
                         make_live_provider)
@@ -56,12 +57,7 @@ class Policy:
             raw = await self.provider.chat(self.messages)
             self.messages.append({"role": "assistant", "content": raw})
             try:
-                action = extract_json(raw)
-                if not isinstance(action.get("action"), str):
-                    raise ValueError("missing 'action'")
-                if not isinstance(action.get("args"), dict):
-                    action["args"] = {}
-                return action
+                return normalize_action(extract_json(raw))
             except (ValueError, json.JSONDecodeError) as exc:
                 last_err = str(exc)
                 self.messages.append({"role": "user", "content": REPAIR.format(error=last_err)})
@@ -305,7 +301,7 @@ class Agent:
                 self.policy.observe(step, name, obs)
             if final is None:
                 raise LLMError("agent ended without a final answer")
-            claims = [c for c in final.get("claims", []) if isinstance(c, dict) and c.get("text")]
+            claims = normalize_claims(final)
             run.emit("drafted", n_claims=len(claims))
             await self.capture_evidence(claims)
             await self.verify(claims)
