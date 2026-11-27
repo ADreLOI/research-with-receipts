@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1010" viewBox="0 0 1600 1010" font-family="Geist, Inter, 'Helvetica Neue', Arial, sans-serif">
+  <!-- Source of docs/architecture.png (rendered with headless Chromium at 2x, Geist from Google Fonts). -->
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1C1B18"/>
+    </marker>
+    <style>
+      .card { fill: #FFFFFF; stroke: #DDD9D0; stroke-width: 1.5; }
+      .title { font-size: 21px; font-weight: 600; fill: #1C1B18; }
+      .body { font-size: 15.5px; fill: #3A3832; }
+      .muted { font-size: 14px; fill: #6B675E; }
+      .mono { font-family: 'Geist Mono', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 13.5px; fill: #4A473F; }
+      .tag { font-family: 'Geist Mono', 'SFMono-Regular', Menlo, Consolas, monospace; font-size: 12px; font-weight: 500; letter-spacing: 0.06em; fill: #6B675E; }
+      .label { font-size: 13.5px; font-weight: 500; fill: #1C1B18; }
+      .line { stroke: #1C1B18; stroke-width: 1.8; fill: none; }
+      .chip { fill: #F1EFEA; stroke: #DDD9D0; }
+      .chiptext { font-size: 13px; fill: #3A3832; }
+      .hl { fill: #FFE680; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1010" fill="#F7F6F3"/>
+
+  <!-- Heading -->
+  <g transform="translate(48 58)">
+    <rect width="30" height="30" rx="7" fill="#FFD43B"/>
+    <path d="M9 6h12v16l-2-1.4-2 1.4-2-1.4-2 1.4-2-1.4-2 1.4z" fill="#1C1B18"/>
+    <path d="M11.6 13.8l1.9 1.9 3.8-4.2" stroke="#FFD43B" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="44" y="22" font-size="24" font-weight="600" fill="#1C1B18">Research with Receipts · architecture</text>
+    <text x="44" y="50" class="muted">Every claim links to evidence captured inside a disposable sandbox on Vultr.</text>
+  </g>
+
+  <!-- User browser -->
+  <rect x="48" y="200" width="250" height="300" rx="14" class="card"/>
+  <text x="72" y="236" class="tag">CLIENT</text>
+  <text x="72" y="266" class="title">Web UI in the browser</text>
+  <text x="72" y="300" class="body">Ask a question</text>
+  <text x="72" y="326" class="body">Live agent timeline</text>
+  <text x="72" y="352" class="body">Claims linked to receipts</text>
+  <text x="72" y="378" class="body">Recompute SHA-256</text>
+  <text x="72" y="404" class="body">Containment test</text>
+  <text x="72" y="430" class="body">Export run as zip</text>
+  <text x="72" y="470" class="muted">Vanilla JS, no build step</text>
+
+  <!-- Vultr VM region -->
+  <rect x="338" y="132" width="878" height="830" rx="18" fill="#EFEDE7" stroke="#CFCAC0" stroke-width="1.5"/>
+  <text x="366" y="168" class="tag">VULTR CLOUD COMPUTE VM</text>
+  <text x="366" y="190" class="muted">Ubuntu 24.04 · 2 vCPU / 4 GB · Amsterdam · systemd</text>
+
+  <!-- Caddy -->
+  <rect x="366" y="222" width="190" height="118" rx="12" class="card"/>
+  <text x="388" y="258" class="title">Caddy</text>
+  <text x="388" y="288" class="body">HTTPS, automatic</text>
+  <text x="388" y="310" class="body">certificate (sslip.io)</text>
+
+  <!-- FastAPI control plane -->
+  <rect x="596" y="214" width="592" height="236" rx="14" class="card" stroke="#1C1B18" stroke-width="1.8"/>
+  <text x="620" y="250" class="tag">CONTROL PLANE</text>
+  <text x="620" y="278" class="title">FastAPI agent · REST + Server-Sent Events</text>
+  <circle cx="626" cy="311" r="4" fill="#1C1B18"/>
+  <text x="640" y="316" class="body"><tspan font-weight="600">Agent loop</tspan>: plan one action, run it in a sandbox, observe</text>
+  <circle cx="626" cy="345" r="4" fill="#1C1B18"/>
+  <text x="640" y="350" class="body"><tspan font-weight="600">Receipt store</tspan>: URL, exact quote, timestamp, SHA-256, screenshot</text>
+  <circle cx="626" cy="379" r="4" fill="#1C1B18"/>
+  <text x="640" y="384" class="body"><tspan font-weight="600">Verifier</tspan>: quote matched on captured text, highlight, vision check</text>
+  <rect x="620" y="404" width="306" height="28" rx="14" fill="#FFF3BF" stroke="#E8C531"/>
+  <text x="636" y="423" class="label">API keys live here only, never in a sandbox</text>
+
+  <g transform="translate(0 30)">
+  <!-- Sandboxes behind the egress guard -->
+  <rect x="366" y="512" width="822" height="392" rx="14" fill="none" stroke="#1C1B18" stroke-width="1.6" stroke-dasharray="7 6"/>
+  <rect x="600" y="500" width="384" height="26" fill="#EFEDE7"/>
+  <text x="612" y="518" class="tag">DOCKER SANDBOXES · EGRESS GUARD (DOCKER-USER)</text>
+
+  <!-- Python container -->
+  <rect x="394" y="550" width="362" height="250" rx="12" class="card"/>
+  <text x="418" y="584" class="tag">ONE PER PYTHON CALL</text>
+  <text x="418" y="612" class="title">Python container</text>
+  <text x="418" y="644" class="body">Runs the model's code for every number</text>
+  <text x="418" y="668" class="body">Charts and stdout become receipts</text>
+  <text x="418" y="692" class="body">On an error, stderr goes back for a retry</text>
+  <text x="418" y="740" class="mono">--network none · 256 MB</text>
+  <text x="418" y="762" class="mono">0.5 CPU · 64 pids · 10 s</text>
+
+  <!-- Browser container -->
+  <rect x="790" y="550" width="370" height="250" rx="12" class="card"/>
+  <text x="814" y="584" class="tag">ONE PER RUN</text>
+  <text x="814" y="612" class="title">Browser container</text>
+  <text x="814" y="644" class="body">Chromium + Playwright</text>
+  <rect x="814" y="660" width="70" height="28" rx="14" class="chip"/>
+  <text x="828" y="679" class="chiptext">search</text>
+  <rect x="892" y="660" width="58" height="28" rx="14" class="chip"/>
+  <text x="906" y="679" class="chiptext">fetch</text>
+  <rect x="958" y="660" width="178" height="28" rx="14" class="chip"/>
+  <text x="972" y="679" class="chiptext">screenshot + highlight</text>
+  <rect x="812" y="700" width="206" height="18" rx="2" class="hl"/>
+  <text x="814" y="713" class="body" font-size="14">“the exact quoted sentence”</text>
+  <text x="814" y="740" class="mono">1 GB · 1 CPU · 512 pids</text>
+  <text x="814" y="762" class="mono">public IPs only · destroyed at the end</text>
+
+  <!-- Hardening chips -->
+  <g class="chiptext">
+    <rect x="394" y="828" width="92" height="30" rx="15" class="chip"/><text x="410" y="848">non-root</text>
+    <rect x="496" y="828" width="160" height="30" rx="15" class="chip"/><text x="512" y="848">read-only root fs</text>
+    <rect x="666" y="828" width="168" height="30" rx="15" class="chip"/><text x="682" y="848">empty environment</text>
+    <rect x="844" y="828" width="150" height="30" rx="15" class="chip"/><text x="860" y="848">no capabilities</text>
+    <rect x="1004" y="828" width="156" height="30" rx="15" class="chip"/><text x="1020" y="848">gVisor (optional)</text>
+  </g>
+  <text x="394" y="888" class="muted">Private, loopback, link-local and cloud metadata addresses are dropped for every container.</text>
+  </g>
+
+  <!-- Vultr Serverless Inference -->
+  <rect x="1262" y="214" width="290" height="300" rx="14" class="card" stroke="#1C1B18" stroke-width="1.8"/>
+  <text x="1286" y="250" class="tag">VULTR SERVERLESS INFERENCE</text>
+  <text x="1286" y="278" class="title">OpenAI-compatible API</text>
+  <text x="1286" y="304" class="mono">api.vultrinference.com/v1</text>
+  <text x="1286" y="346" class="label">deepseek-v4.1-flash</text>
+  <text x="1286" y="368" class="muted">plans and writes the brief</text>
+  <text x="1286" y="404" class="label">qwen3.8-27b</text>
+  <text x="1286" y="426" class="muted">fallback model</text>
+  <text x="1286" y="462" class="label">mimo-v2.6-flash</text>
+  <text x="1286" y="484" class="muted">vision check of screenshots</text>
+
+  <g transform="translate(0 30)">
+  <!-- Public web -->
+  <rect x="1262" y="600" width="290" height="200" rx="14" fill="#FFFFFF" stroke="#DDD9D0" stroke-width="1.5" stroke-dasharray="5 5"/>
+  <text x="1286" y="636" class="tag">UNTRUSTED</text>
+  <text x="1286" y="664" class="title">Public web</text>
+  <text x="1286" y="696" class="body">Search engines, Wikipedia,</text>
+  <text x="1286" y="720" class="body">any page the agent opens</text>
+  <text x="1286" y="760" class="muted">Page text is fenced as untrusted;</text>
+  <text x="1286" y="782" class="muted">prompt injection is flagged</text>
+  <path d="M1160 700 H 1258" class="line" marker-end="url(#arrow)"/>
+  </g>
+
+  <!-- Arrows -->
+  <path d="M298 281 H 362" class="line" marker-end="url(#arrow)"/>
+  <text x="306" y="268" class="label">HTTPS</text>
+  <path d="M556 281 H 592" class="line" marker-end="url(#arrow)"/>
+  <path d="M1188 330 H 1258" class="line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="1196" y="316" class="label">chat</text>
+  <text x="1196" y="356" class="label">vision</text>
+
+  <path d="M575 454 V 576" class="line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="586" y="486" class="label">run code</text>
+  <text x="586" y="506" class="muted">stdout, charts, stderr</text>
+  <path d="M1060 454 V 576" class="line" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text x="1046" y="486" class="label" text-anchor="end">search · fetch · screenshot</text>
+  <text x="1046" y="506" class="muted" text-anchor="end">page text, highlighted image</text>
+
+</svg>

@@ -14,21 +14,9 @@ When you self-host, leave `APP_ACCESS_CODE` empty in `.env` to turn the code off
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    U[Browser] -- HTTPS --> C[Caddy]
-    C --> API[FastAPI control plane on a Vultr VM<br/>agent loop · receipts · live events]
-    API -- "chat + vision<br/>(API key lives here only)" --> VI[Vultr Serverless Inference]
-    API -- "docker run / exec" --> SB
-    subgraph SB[Disposable sandboxes]
-      B[Browser container per run<br/>Chromium + Playwright<br/>private and metadata IPs blocked]
-      P[Python container per call<br/>no network · 256 MB · 10 s]
-    end
-    B -. "search · fetch · screenshot" .-> W[(Public web)]
-    B -- "page text + screenshot" --> API
-    P -- "stdout + charts" --> API
-    API --> R[(Receipt store<br/>text · quote · sha256 · image)]
-```
+![Architecture: browser UI, Caddy and the FastAPI control plane on a Vultr VM, Docker sandboxes behind the egress guard, Vultr Serverless Inference](docs/architecture.png)
+
+Diagram source: [`docs/architecture.svg`](docs/architecture.svg).
 
 **The loop.** The model answers with one JSON action at a time (`search`, `fetch`, `screenshot`, `python`, `final`), so any OpenAI-compatible model works. The control plane runs each action in the run's sandbox and turns every page read and every Python run into a receipt. Page text goes back to the model fenced as untrusted content. When code fails, stderr goes back and the model fixes it. For the final answer, the sandboxed browser re-opens each source, highlights the quoted sentence and screenshots it. Each quote is matched against the captured text, and an optional vision model checks the screenshot. Then the sandbox is destroyed.
 
@@ -46,23 +34,44 @@ flowchart LR
 
 Every run streams its timeline over Server-Sent Events. Any run can be exported as a zip with an offline verifier, and any recorded run can be replayed through the same pipeline, labelled as a replay.
 
+## Requirements
+
+- Python 3.11 or newer
+- Docker, for the real sandbox (without it a labelled mock sandbox is used)
+- A Vultr Serverless Inference API key, for the real model (without it a labelled mock policy is used)
+
 ## Run it locally
 
 ```bash
+git clone https://github.com/ADreLOI/research-with-receipts && cd research-with-receipts
 cp .env.example .env
-./scripts/dev.sh                    # http://127.0.0.1:8000
+./scripts/dev.sh                    # creates .venv, installs requirements, serves http://127.0.0.1:8000
 ```
 
-With no `VULTR_INFERENCE_API_KEY`, a labelled mock policy plans the research. With no Docker, a labelled mock sandbox serves fixture pages. To use the real sandbox and model:
+That runs fully offline: a labelled mock policy plans the research and, without Docker, a labelled mock sandbox serves fixture pages. The three demo questions also replay their recorded live runs. To use the real sandbox and model:
 
 ```bash
-./scripts/build_sandbox.sh          # builds rwr-sandbox:latest (Chromium, Python toolbox)
+./scripts/build_sandbox.sh          # builds rwr-sandbox:latest (Chromium, Playwright, Python toolbox)
 # in .env: VULTR_INFERENCE_API_KEY=...  (Vultr portal > Serverless > Inference)
 python scripts/doctor.py            # checks config, Docker, inference and the sandbox tools
 SANDBOX_BACKEND=docker ./scripts/dev.sh
 ```
 
-Tests run offline: `pip install -r requirements-dev.txt && pytest -q`
+## Configuration
+
+Everything is an environment variable, documented in [`.env.example`](.env.example). The ones that matter most:
+
+| Variable | Purpose |
+|---|---|
+| `VULTR_INFERENCE_API_KEY` | Serverless Inference key. Lives only in the control plane, never in a sandbox |
+| `LLM_MODEL`, `LLM_FALLBACK_MODEL`, `VISION_MODEL` | Planner, fallback and screenshot-check models (empty = picked from the live model list) |
+| `LLM_MAX_TOKENS`, `VISION_MAX_TOKENS` | Token budgets (4000 and 1500; reasoning models need room) |
+| `SANDBOX_BACKEND` | `docker` or `mock` (`auto` uses Docker when the daemon and the sandbox image exist) |
+| `SANDBOX_RUNTIME` | `runsc` to run sandboxes under gVisor |
+| `SANDBOX_DOCKER_HOST` | Run sandboxes on another host, such as a throwaway Vultr VM |
+| `SEARCH_PROVIDER`, `BRAVE_SEARCH_API_KEY` | Keyless search by default (DuckDuckGo, then Wikipedia); Brave with a key |
+| `DEMO_MODE` | `auto` replays a recorded run when the live model is unreachable |
+| `APP_ACCESS_CODE` | Code required to start runs on a public URL (empty = open) |
 
 ## Deploy on Vultr
 
@@ -76,7 +85,43 @@ sudo systemctl restart rwr
 sudo -u rwr .venv/bin/python scripts/doctor.py
 ```
 
-Later updates: `sudo bash deploy/update.sh`. All settings are environment variables documented in [`.env.example`](.env.example). Keys never enter a sandbox.
+Add `INSTALL_GVISOR=1` before the setup command to install gVisor, then set `SANDBOX_RUNTIME=runsc`. Later updates: `sudo bash deploy/update.sh`. To keep sandboxes off the app VM entirely, `scripts/vultr_sandbox_vm.py` creates a separate throwaway Vultr VM through the Vultr API (needs `VULTR_API_KEY`).
+
+## API
+
+| Endpoint | What it does |
+|---|---|
+| `GET /api/health` | Sandbox backend, model status, limits, whether an access code is needed |
+| `POST /api/runs` | Start a run: `{"question": "...", "mode": "auto"}`, header `X-Access-Code` when required |
+| `GET /api/runs/{id}/events` | Live timeline as Server-Sent Events |
+| `GET /api/runs/{id}` | Answer, claims with verification, receipts |
+| `GET /api/runs/{id}/receipts/{rid}/verify` | Recompute a receipt's SHA-256 on the server |
+| `GET /api/runs/{id}/export` | Zip with every receipt, an offline report and `verify_bundle.py` |
+| `GET /api/containment-test` | Throw eight attacks at a fresh sandbox, streamed |
+
+## Project layout
+
+```
+app/              FastAPI control plane: agent loop, prompts, receipts, verification, export
+app/providers/    Vultr Serverless Inference client, mock policy, record and replay
+app/sandbox/      Docker sandbox (hardened docker run / exec), mock sandbox, replay
+sandbox_image/    Sandbox image: Chromium, Playwright, Python toolbox and the in-container worker
+web/              Single-page UI (vanilla JS, no build step)
+deploy/           VM setup, Caddy, systemd units, egress guard, update script
+scripts/          dev server, doctor, demo and recording, containment test, throwaway sandbox VM
+demo/             Hostile demo page and recorded runs used for replay
+tests/            Offline test suite
+docs/             Architecture diagram and its source
+```
+
+## Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```
+
+The suite runs offline with mock model and sandbox doubles. It covers the agent loop, quote matching and verification, receipts and hashes, replay, the API and the sandbox worker's search fallbacks.
 
 ## Demo questions
 
