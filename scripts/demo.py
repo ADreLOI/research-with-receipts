@@ -12,8 +12,15 @@ from __future__ import annotations
 import json
 import os
 import sys
+from pathlib import Path
 
 import httpx
+
+# Pick up PUBLIC_BASE_URL and APP_ACCESS_CODE from the repo's .env when run on the VM.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.config import ROOT, _load_dotenv  # noqa: E402
+
+_load_dotenv(ROOT / ".env")
 
 BASE = os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
 CODE = os.environ.get("APP_ACCESS_CODE", "")

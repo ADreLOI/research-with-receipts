@@ -33,18 +33,19 @@ sudo systemctl restart rwr
 cd /opt/rwr
 sudo -u rwr .venv/bin/python scripts/check_inference.py          # must end with "chat: OK"
 curl -s localhost:8000/api/health | python3 -m json.tool | head -20
-BASE_URL=http://localhost:8000 APP_ACCESS_CODE=<code> sudo -u rwr .venv/bin/python scripts/containment_test.py
-BASE_URL=http://localhost:8000 APP_ACCESS_CODE=<code> sudo -u rwr .venv/bin/python scripts/demo.py 1
+sudo -u rwr .venv/bin/python scripts/containment_test.py         # expect 8x CONTAINED
+sudo -u rwr .venv/bin/python scripts/demo.py 1                   # live run, streams the action log
 journalctl -u rwr -n 100 --no-pager                              # if anything fails, send this (no keys in it)
 ```
 
-Then open the public URL in a browser: the header should show `sandbox: docker (runc)` and `llm: vultr <model>` in green.
+The scripts read `APP_ACCESS_CODE` and `PUBLIC_BASE_URL` from `.env`. Then open the public URL in a browser: the header should show `sandbox: docker (runc)` and `llm: vultr <model>` in green.
 
 ## 4. Safety net recording (~5 min)
 
 ```bash
 cd /opt/rwr
-BASE_URL=http://localhost:8000 APP_ACCESS_CODE=<code> sudo -u rwr .venv/bin/python scripts/record_demo.py
+sudo -u rwr .venv/bin/python scripts/record_demo.py
+git config --global --add safe.directory /opt/rwr     # the checkout is owned by the rwr user
 git add demo/cassettes && git commit -m "Record demo cassettes on the VM" && git push   # needs a key with write access
 ```
 

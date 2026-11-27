@@ -5,8 +5,15 @@ Usage: BASE_URL=http://localhost:8000 python scripts/containment_test.py
 
 import json
 import os
+import sys
+from pathlib import Path
 
 import httpx
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from app.config import ROOT, _load_dotenv  # noqa: E402
+
+_load_dotenv(ROOT / ".env")  # picks up APP_ACCESS_CODE on the VM
 
 BASE = os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
 CODE = os.environ.get("APP_ACCESS_CODE", "")
