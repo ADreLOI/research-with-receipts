@@ -24,6 +24,9 @@ from datetime import datetime, timezone
 MAX_TEXT = 20000
 UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
       "Chrome/124.0 Safari/537.36 ResearchWithReceipts/1.0")
+# Wikimedia APIs reject browser-like agents from datacenter IPs (403) and ask
+# for a descriptive one with a contact URL: https://meta.wikimedia.org/wiki/User-Agent_policy
+WIKI_UA = "ResearchWithReceipts/1.0 (https://github.com/ADreLOI/research-with-receipts) httpx"
 ALLOW_HOSTS = {h.strip().lower() for h in os.environ.get("RWR_ALLOW_HOSTS", "").split(",") if h.strip()}
 _ip_cache: dict[str, bool] = {}
 
@@ -100,7 +103,9 @@ def keywords(query: str, limit: int = 6) -> str:
 
 def _ddg_html(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
     r = httpx.post("https://html.duckduckgo.com/html/", data={"q": query},
-                   headers={"User-Agent": UA}, timeout=15, follow_redirects=True)
+                   headers={"User-Agent": UA}, timeout=10, follow_redirects=True)
+    if r.status_code == 202:  # bot challenge, typical for datacenter IPs
+        raise RuntimeError("bot challenge (HTTP 202)")
     out: list[dict] = []
     for res in BeautifulSoup(r.text, "html.parser").select(".result"):
         a = res.select_one("a.result__a")
@@ -121,7 +126,9 @@ def _ddg_html(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
 
 def _ddg_lite(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
     r = httpx.post("https://lite.duckduckgo.com/lite/", data={"q": query},
-                   headers={"User-Agent": UA}, timeout=15, follow_redirects=True)
+                   headers={"User-Agent": UA}, timeout=10, follow_redirects=True)
+    if r.status_code == 202:
+        raise RuntimeError("bot challenge (HTTP 202)")
     soup = BeautifulSoup(r.text, "html.parser")
     snippets = [td.get_text(" ", strip=True) for td in soup.select("td.result-snippet")]
     out: list[dict] = []
@@ -141,7 +148,8 @@ def _ddg_lite(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
 def _wikipedia(httpx, BeautifulSoup, query: str, n: int) -> list[dict]:
     r = httpx.get("https://en.wikipedia.org/w/api.php",
                   params={"action": "query", "list": "search", "srsearch": query, "format": "json", "srlimit": n},
-                  headers={"User-Agent": UA}, timeout=15)
+                  headers={"User-Agent": WIKI_UA, "Api-User-Agent": WIKI_UA}, timeout=15)
+    r.raise_for_status()
     out = []
     for item in r.json().get("query", {}).get("search", []):
         title = item["title"]
@@ -187,7 +195,9 @@ def fetch(req: dict) -> dict:
     url = check_url(str(req["url"]))
     # Follow redirects manually so every hop is checked against the blocklist.
     for _ in range(5):
-        r = httpx.get(url, headers={"User-Agent": UA}, timeout=20, follow_redirects=False)
+        host = (urllib.parse.urlparse(url).hostname or "").lower()
+        ua = WIKI_UA if host.endswith(("wikipedia.org", "wikimedia.org", "wikidata.org")) else UA
+        r = httpx.get(url, headers={"User-Agent": ua}, timeout=20, follow_redirects=False)
         if r.is_redirect and r.headers.get("location"):
             url = check_url(urllib.parse.urljoin(url, r.headers["location"]))
             continue

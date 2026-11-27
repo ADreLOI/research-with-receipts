@@ -55,12 +55,26 @@ The scripts read `APP_ACCESS_CODE` and `PUBLIC_BASE_URL` from `.env`. Then open 
 
 ```bash
 cd /opt/rwr
-sudo -u rwr .venv/bin/python scripts/record_demo.py
-git config --global --add safe.directory /opt/rwr     # the checkout is owned by the rwr user
-git config --global user.name "rwr VM" && git config --global user.email "vm@rwr.invalid"
-git add demo/cassettes && git commit -m "Record demo cassettes on the VM"
-export GIT_SSH_COMMAND="ssh -i ~/.ssh/rwr_deploy"
-git pull --rebase origin claude/research-with-receipts && git push origin HEAD:claude/research-with-receipts
+sudo -u rwr .venv/bin/python scripts/record_demo.py        # refuses to save runs that used the mock policy
+```
+
+Then get `demo/cassettes/` into the repo, either way works:
+
+- **The VM can push** (deploy key with write access):
+  ```bash
+  git config --global --add safe.directory /opt/rwr
+  git config --global user.name "rwr VM" && git config --global user.email "vm@rwr.invalid"
+  git add demo/cassettes && git commit -m "Record demo cassettes on the VM"
+  export GIT_SSH_COMMAND="ssh -i ~/.ssh/rwr_deploy"
+  git pull --rebase origin claude/research-with-receipts && git push origin HEAD:claude/research-with-receipts
+  ```
+- **It can't:** `tar czf /tmp/cassettes.tgz -C /opt/rwr demo/cassettes`, copy it off with
+  `scp root@<VM_IP>:/tmp/cassettes.tgz .` and upload the file to the project chat. It gets committed from there.
+
+## Updating a running VM
+
+```bash
+cd /opt/rwr && sudo bash deploy/update.sh    # pulls, re-installs the egress guard, rebuilds the image, restarts, runs doctor
 ```
 
 ## 5. Demo video without screen recording (~6 min, optional)

@@ -16,11 +16,15 @@ LITE_HTML = """<table>
 
 
 class FakeResponse:
-    def __init__(self, text="", data=None):
-        self.text, self._data = text, data
+    def __init__(self, text="", data=None, status_code=200):
+        self.text, self._data, self.status_code = text, data, status_code
 
     def json(self):
         return self._data
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            raise OSError(f"HTTP {self.status_code}")
 
 
 def load_worker(post, get):
@@ -53,7 +57,8 @@ def test_lite_endpoint_used_when_html_endpoint_is_empty(run_search):
 def test_wikipedia_keyword_retry_when_everything_else_is_empty(run_search):
     seen = []
 
-    def get(url, params=None, **kw):
+    def get(url, params=None, headers=None, **kw):
+        assert "github.com/ADreLOI/research-with-receipts" in headers["User-Agent"]  # Wikimedia UA policy
         seen.append(params["srsearch"])
         hits = [{"title": "World population", "snippet": "<b>world</b> population"}] if len(seen) > 1 else []
         return FakeResponse(data={"query": {"search": hits}})
@@ -70,3 +75,14 @@ def test_all_engines_failing_returns_empty_with_reasons(run_search):
 
     out = run_search(boom, boom)
     assert out["results"] == [] and "duckduckgo: OSError" in out["provider"]
+
+
+def test_duckduckgo_bot_challenge_is_skipped_quickly(run_search):
+    def post(url, **kw):
+        return FakeResponse("<html>challenge</html>", status_code=202)
+
+    def get(url, params=None, headers=None, **kw):
+        return FakeResponse(data={"query": {"search": [{"title": "Amsterdam", "snippet": "capital"}]}})
+
+    out = run_search(post, get, query="Amsterdam population")
+    assert out["provider"] == ("wikipedia (after duckduckgo: RuntimeError, duckduckgo-lite: RuntimeError)")

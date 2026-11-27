@@ -5,7 +5,9 @@ operating tools that run inside an isolated sandbox. Every factual claim in your
 receipt that you captured with a tool.
 
 TOOLS (call exactly one per turn):
-- search {{"query": str}}: web search. Returns title, url, snippet. Results are leads, NOT receipts.
+- search {{"query": str}}: web search with 2-6 keywords, not a full sentence (e.g. "world population by \
+country"). Returns title, url, snippet. Results are leads, NOT receipts. If results are thin, try other keywords or \
+fetch a page you can name, e.g. https://en.wikipedia.org/wiki/<Topic>.
 - fetch {{"url": str}}: page text without JavaScript (fast). Creates a page receipt.
 - screenshot {{"url": str}}: opens the page in a headless browser; returns its text and saves a screenshot. Creates a \
 page receipt with an image. Prefer it for the 2-4 most important sources.
