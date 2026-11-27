@@ -17,7 +17,7 @@ import httpx
 
 from .cassettes import Cassette, Recorder
 from .config import settings
-from .llm import LLMError, extract_json
+from .llm import ContextTooLong, LLMError, extract_json
 from .normalize import normalize_action, normalize_claims
 from .prompts import FORCE_FINAL, REPAIR, SYSTEM_PROMPT
 from .providers import (LLMProvider, MockProvider, RecordingProvider, ReplayProvider, VultrProvider,
@@ -54,7 +54,7 @@ class Policy:
             self.messages.append({"role": "user", "content": FORCE_FINAL})
         last_err = ""
         for _ in range(3):
-            raw = await self.provider.chat(self.messages)
+            raw = await self._chat()
             self.messages.append({"role": "assistant", "content": raw})
             try:
                 return normalize_action(extract_json(raw))
@@ -62,6 +62,30 @@ class Policy:
                 last_err = str(exc)
                 self.messages.append({"role": "user", "content": REPAIR.format(error=last_err)})
         raise LLMError(f"model did not produce a valid action: {last_err}")
+
+    async def _chat(self) -> str:
+        """Call the model; if the history no longer fits its context, shrink old observations and retry."""
+        last: ContextTooLong | None = None
+        for keep_chars in (None, 1200, 400):
+            if keep_chars is not None and not self.compact(keep_chars):
+                continue  # nothing that long yet; try the tighter budget
+            try:
+                return await self.provider.chat(self.messages)
+            except ContextTooLong as exc:
+                last = exc
+                log.warning("context too long, compacting observations (%s)", exc)
+        assert last is not None
+        raise last
+
+    def compact(self, keep_chars: int) -> bool:
+        """Trim earlier observations to keep_chars each (the last one stays whole). True if anything changed."""
+        changed = False
+        obs = [m for m in self.messages if m["role"] == "user" and str(m["content"]).startswith("Observation for")]
+        for m in obs[:-1]:
+            if len(m["content"]) > keep_chars + 40:
+                m["content"] = m["content"][:keep_chars] + "\n[...trimmed to fit the model's context]"
+                changed = True
+        return changed
 
     def observe(self, step: int, tool: str, text: str) -> None:
         self.messages.append({"role": "user", "content": f"Observation for step {step} ({tool}):\n{text}"})

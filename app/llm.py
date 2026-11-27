@@ -11,6 +11,18 @@ class LLMError(RuntimeError):
     pass
 
 
+class ContextTooLong(LLMError):
+    """The conversation no longer fits the model's context window."""
+
+
+_CTX_HINTS = ("context length", "context_length", "context window", "maximum context", "too many tokens",
+              "prompt is too long", "input is too long", "reduce the length", "exceeds the maximum")
+
+
+def is_context_error(status: int, body: str) -> bool:
+    return status in (400, 413, 422) and any(h in body.lower() for h in _CTX_HINTS)
+
+
 _THINK = re.compile(r"<think>.*?</think>", re.S)
 
 

@@ -174,3 +174,36 @@ def test_paraphrased_quote_is_snapped_to_source_and_capped(monkeypatch):
     assert events(run, "snap")
     # A claim without a quote only snaps if a sentence is genuinely close to the claim text.
     assert not b.get("quote_snapped") and b["verification"]["status"] == "unverified"
+
+
+def test_context_overflow_trims_old_observations_and_continues(monkeypatch):
+    from app.llm import ContextTooLong
+
+    from .helpers import ScriptedProvider as Base
+
+    class TightContext(Base):
+        """Rejects any prompt holding two untrimmed observations, like a small context window would."""
+
+        overflows = 0
+
+        async def chat(self, messages, **kw):
+            obs = [m for m in messages if str(m["content"]).startswith("Observation for")]
+            if len(obs) >= 2 and not any("trimmed" in m["content"] for m in obs):
+                TightContext.overflows += 1
+                raise ContextTooLong("maximum context length exceeded")
+            return await super().chat(messages, **kw)
+
+    provider = TightContext([act("screenshot", url=GVISOR), act("fetch", url=GVISOR),
+                             final(claim("gVisor ships runsc.", ["R1"], GVISOR_QUOTE))])
+
+    async def make():
+        return CountingSandbox()
+
+    monkeypatch.setattr(agent_mod, "make_live_provider", lambda: provider)
+    monkeypatch.setattr(agent_mod, "make_sandbox", make)
+    run = registry.create("What is gVisor?")
+    asyncio.run(execute_run(run))
+    assert run.status == "done", run.error
+    assert TightContext.overflows == 1
+    first_obs = next(m for m in provider.seen[-1] if str(m["content"]).startswith("Observation for"))
+    assert "trimmed to fit" in first_obs["content"]

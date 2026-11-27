@@ -132,3 +132,19 @@ def test_mock_provider_returns_valid_actions():
     out = asyncio.run(MockProvider().chat([{"role": "system", "content": "s"},
                                            {"role": "user", "content": "Question: what is gVisor?"}]))
     assert json.loads(out)["action"] == "search"
+
+
+def test_context_overflow_is_not_mistaken_for_a_missing_model():
+    from app.llm import ContextTooLong
+
+    calls = []
+
+    def handler(req):
+        calls.append(json.loads(req.content)["model"])
+        return httpx.Response(400, json={"error": "This model's maximum context length is 8192 tokens."})
+
+    p = _provider(handler)
+    p.fallback_model = "backup-model"
+    with pytest.raises(ContextTooLong):
+        asyncio.run(p.chat([{"role": "user", "content": "x"}]))
+    assert calls == ["primary-model"]  # no pointless fallback: a shorter prompt is the fix

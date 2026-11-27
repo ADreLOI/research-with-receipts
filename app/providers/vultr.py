@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 
 from ..config import settings
-from ..llm import LLMError, extract_json, strip_reasoning
+from ..llm import ContextTooLong, LLMError, extract_json, is_context_error, strip_reasoning
 from .base import LLMProvider, ProviderInfo
 
 log = logging.getLogger(__name__)
@@ -157,6 +157,8 @@ class VultrProvider(LLMProvider):
                         retries: int | None = None) -> str:
         body = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
         r = await self._request("POST", "/chat/completions", json=body, retries=retries)
+        if is_context_error(r.status_code, r.text):
+            raise ContextTooLong(f"model {model!r}: conversation too long: {r.text[:200]}")
         if r.status_code in (400, 404) and "model" in r.text.lower():
             raise ModelUnavailable(f"model {model!r} unavailable: {r.text[:200]}")
         if r.status_code >= 400:
@@ -190,6 +192,8 @@ class VultrProvider(LLMProvider):
             text = await self._complete(primary, messages, max_tokens, temperature)
             self.active_model = primary
             return text
+        except ContextTooLong:
+            raise  # the caller shortens the conversation; another model would not help
         except LLMError as exc:
             if not self.fallback_model or self.fallback_model == primary:
                 raise
