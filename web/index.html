@@ -4,23 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Research with Receipts</title>
+<meta name="description" content="A research agent whose every claim links to evidence captured inside a disposable Vultr sandbox.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23f5b400'/><path d='M9 7h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z' fill='%23161a22'/></svg>">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
+<div class="offline" id="offline" hidden>Can't reach the backend. Retrying…</div>
 <header class="top">
-  <div class="brand">
+  <a class="brand" href="/" aria-label="Research with Receipts home">
     <span class="logo" aria-hidden="true">
       <svg viewBox="0 0 32 32" width="28" height="28"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 7h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z" fill="#161a22"/><path d="M12 12h8M12 16h8M12 20h5" stroke="var(--accent)" stroke-width="1.6"/></svg>
     </span>
-    <div>
-      <h1>Research with Receipts</h1>
-      <p class="tag">Every claim links to evidence captured inside a Vultr sandbox.</p>
-    </div>
-  </div>
+    <span>
+      <span class="title">Research with Receipts</span>
+      <span class="tag">Every claim links to evidence captured inside a Vultr sandbox.</span>
+    </span>
+  </a>
   <div class="status" id="status">
-    <span class="pill" id="pill-sandbox">sandbox: ...</span>
-    <span class="pill" id="pill-llm">llm: ...</span>
+    <span class="pill" id="pill-sandbox" title="Where browsing and code run">sandbox: …</span>
+    <span class="pill" id="pill-llm" title="Which model plans the research">llm: …</span>
     <button class="btn ghost" id="btn-contain" type="button">Run containment test</button>
   </div>
 </header>
@@ -29,40 +31,38 @@
   <section class="col-left">
     <form id="ask" class="card">
       <label for="q" class="label">Research question</label>
-      <textarea id="q" rows="3" maxlength="600" placeholder="e.g. How does gVisor isolate containers, and what does it cost in performance?" required></textarea>
+      <textarea id="q" rows="3" maxlength="600" placeholder="Ask something worth checking…" required></textarea>
       <div class="row" id="code-row" hidden>
-        <input id="access" type="password" placeholder="Access code" autocomplete="off">
+        <input id="access" type="password" placeholder="Access code" autocomplete="off" aria-label="Access code">
       </div>
       <button class="btn primary" type="submit" id="go">Research it</button>
       <label class="toggle" id="replay-row" hidden>
         <input type="checkbox" id="replay">
         <span>Replay the recorded run <span class="muted">(offline-safe, clearly labelled)</span></span>
       </label>
+      <p class="hint muted">Ctrl/Cmd + Enter to submit</p>
       <div class="examples" id="examples"></div>
     </form>
 
     <div class="card sandbox-card" id="sandbox-card">
       <h2>Sandbox</h2>
-      <div id="sandbox-info" class="muted">No run yet. Each run gets a fresh container that is destroyed at the end.</div>
+      <div id="sandbox-info" class="muted small">No run yet. Each run gets a fresh container that is destroyed at the end.</div>
     </div>
 
     <div class="card">
       <h2>History</h2>
-      <ul id="history" class="history"><li class="muted">No runs yet.</li></ul>
+      <ul id="history" class="history"><li class="muted small">No runs yet.</li></ul>
     </div>
   </section>
 
   <section class="col-main">
-    <div class="card answer" id="answer">
-      <div class="empty">
-        <h2>Ask something worth checking.</h2>
-        <p>The agent plans searches, drives a headless browser and runs Python inside an isolated container.
-          The answer comes back as claims, and each claim is tied to a receipt: the source URL, the exact quote,
-          and a screenshot with that quote highlighted.</p>
-      </div>
-    </div>
+    <div class="card answer" id="answer"></div>
     <div class="card" id="receipts-card" hidden>
-      <h2>Receipts <span class="muted" id="receipts-count"></span></h2>
+      <div class="receipts-head">
+        <h2>Receipts <span class="muted" id="receipts-count"></span></h2>
+        <div class="tabs" role="tablist" id="receipt-tabs"></div>
+      </div>
+      <p class="muted small receipts-help">Hover a claim to see its receipts, or a receipt to see the claims it supports. Click to inspect and verify its SHA-256.</p>
       <div class="receipts" id="receipts"></div>
     </div>
   </section>
@@ -70,12 +70,12 @@
   <section class="col-log">
     <div class="card log-card">
       <h2>Live action log <span class="live" id="live" hidden>live</span></h2>
-      <ol class="log" id="log"><li class="muted">Actions, retries and sandbox events appear here as they happen.</li></ol>
+      <ol class="log" id="log"><li class="muted small">Plans, tool calls, retries and sandbox events appear here as they happen.</li></ol>
     </div>
   </section>
 </main>
 
-<dialog id="modal" class="modal">
+<dialog id="modal" class="modal" aria-labelledby="modal-title">
   <div class="modal-head">
     <h3 id="modal-title">Receipt</h3>
     <button class="btn ghost" type="button" data-close>Close</button>
@@ -83,14 +83,14 @@
   <div id="modal-body" class="modal-body"></div>
 </dialog>
 
-<dialog id="contain" class="modal">
+<dialog id="contain" class="modal" aria-labelledby="contain-title">
   <div class="modal-head">
-    <h3>Containment test</h3>
+    <h3 id="contain-title">Containment test</h3>
     <button class="btn ghost" type="button" data-close>Close</button>
   </div>
   <div class="modal-body">
     <p class="muted">Hostile actions are thrown at a fresh sandbox. Each one should be absorbed without touching the host.</p>
-    <div id="contain-sandbox" class="muted"></div>
+    <div id="contain-sandbox" class="muted small"></div>
     <ol id="contain-list" class="attacks"></ol>
     <div id="contain-done"></div>
   </div>

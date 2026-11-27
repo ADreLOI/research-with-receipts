@@ -126,6 +126,16 @@ async def get_receipt(run_id: str, rid: str) -> dict:
     return rec.public(include_text=True)
 
 
+@app.get("/api/runs/{run_id}/receipts/{rid}/verify")
+async def verify_receipt(run_id: str, rid: str) -> dict:
+    """Recompute the receipt's SHA-256 server-side (the UI also does it in the browser)."""
+    run = registry.get(run_id)
+    rec = run.receipts.get(rid) if run else None
+    if not rec:
+        raise HTTPException(404, "receipt not found")
+    return run.receipts.verify_hash(rec)
+
+
 @app.get("/api/runs/{run_id}/receipts/{rid}/image")
 async def receipt_image(run_id: str, rid: str) -> FileResponse:
     run = registry.get(run_id)

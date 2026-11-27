@@ -60,16 +60,14 @@ class ReceiptStore:
         return f"R{len(self.items) + 1}"
 
     def add(self, receipt: Receipt, image_b64: str = "", image_mime: str = "") -> Receipt:
-        h = hashlib.sha256()
-        h.update((receipt.url + "\n" + receipt.text + "\n" + receipt.code + "\n" + receipt.stdout).encode())
+        raw = b""
         if image_b64:
             raw = base64.b64decode(image_b64)
-            h.update(raw)
             ext = {"image/jpeg": "jpg", "image/png": "png", "image/svg+xml": "svg"}.get(image_mime, "bin")
             name = f"{receipt.id}.{ext}"
             (self.dir / name).write_bytes(raw)
             receipt.image_file, receipt.image_mime = name, image_mime
-        receipt.sha256 = h.hexdigest()
+        receipt.sha256 = receipt_hash(receipt, raw)
         self.items[receipt.id] = receipt
         return receipt
 
@@ -82,6 +80,27 @@ class ReceiptStore:
                 return r
         return None
 
+    def image_bytes(self, receipt: Receipt) -> bytes:
+        return (self.dir / receipt.image_file).read_bytes() if receipt.image_file else b""
+
+    def verify_hash(self, receipt: Receipt) -> dict[str, Any]:
+        """Recompute a receipt's SHA-256 from what is stored now and compare."""
+        raw = self.image_bytes(receipt)
+        recomputed = receipt_hash(receipt, raw)
+        return {"receipt_id": receipt.id, "stored": receipt.sha256, "recomputed": recomputed,
+                "match": recomputed == receipt.sha256, "image_bytes": len(raw),
+                "text_chars": len(receipt.text), "formula": HASH_FORMULA}
+
+
+HASH_FORMULA = "sha256(utf8(url + '\\n' + text + '\\n' + code + '\\n' + stdout) + image_bytes)"
+
+
+def receipt_hash(receipt: Receipt, image: bytes = b"") -> str:
+    """Content hash of a receipt. The web UI recomputes the same formula in the browser."""
+    h = hashlib.sha256()
+    h.update((receipt.url + "\n" + receipt.text + "\n" + receipt.code + "\n" + receipt.stdout).encode())
+    h.update(image)
+    return h.hexdigest()
 
 # ------------------------------------------------------------ verification
 
